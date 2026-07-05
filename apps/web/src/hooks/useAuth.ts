@@ -1,14 +1,18 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Profile } from "@lendtrack/shared-types";
+import type { NotificationPrefs, Profile } from "@lendtrack/shared-types";
 import { getAuthUser, supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
 
 export function useProfile() {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ["profile"],
+    queryKey: ["profile", user?.id],
     queryFn: async () => {
-      const user = await getAuthUser();
+      if (!user) throw new Error("Not authenticated");
+
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -18,7 +22,32 @@ export function useProfile() {
       if (error) throw new Error(error.message);
       return data as Profile;
     },
+    enabled: !!user,
     retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: { full_name?: string; notification_prefs?: NotificationPrefs }) => {
+      const user = await getAuthUser();
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data as Profile;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
   });
 }
 

@@ -1,10 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
-import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
+import {
+  EmptyState,
+  LoanCard,
+  PageHeader,
+  PageSkeleton,
+  StatCard,
+} from "@/components/page-layout";
 import { useDashboardSummary } from "@/hooks/useLoans";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { data, isLoading } = useDashboardSummary();
@@ -14,55 +23,58 @@ export default function DashboardPage() {
       <AppShell>
         <PageHeader
           title="Dashboard"
+          subtitle="The Neighborly Ledger"
           description="Overview of your active and upcoming loans"
           action={
             <Link
               href="/loans/new"
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              className={cn(
+                buttonVariants(),
+                "gap-2 rounded-xl shadow-sm active:scale-95"
+              )}
             >
+              <Plus className="size-4" />
               New loan
             </Link>
           }
         />
 
         {isLoading ? (
-          <p className="text-slate-500">Loading...</p>
+          <PageSkeleton />
         ) : (
           <>
-            <div className="mb-8 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-white p-6">
-                <p className="text-sm text-slate-500">Active loans</p>
-                <p className="mt-1 text-3xl font-bold text-slate-900">{data?.active_count ?? 0}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-6">
-                <p className="text-sm text-slate-500">Overdue</p>
-                <p className="mt-1 text-3xl font-bold text-red-600">{data?.overdue_count ?? 0}</p>
-              </div>
+            <div className="mb-8 grid grid-cols-2 gap-4">
+              <StatCard label="Active loans" value={data?.active_count ?? 0} />
+              <StatCard
+                label="Overdue"
+                value={data?.overdue_count ?? 0}
+                variant="error"
+              />
             </div>
 
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Due in the next 7 days</h2>
-            {!data?.upcoming_due?.length ? (
-              <EmptyState message="No loans due this week. You're all caught up!" />
-            ) : (
-              <div className="space-y-3">
-                {data.upcoming_due.map((loan) => (
-                  <Link
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                  Due in the next 7 days
+                </h2>
+              </div>
+
+              {!data?.upcoming_due?.length ? (
+                <EmptyState message="No loans due this week. You're all caught up!" />
+              ) : (
+                data.upcoming_due.map((loan) => (
+                  <LoanCard
                     key={loan.id}
                     href={`/loans/${loan.id}`}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 hover:border-emerald-300"
-                  >
-                    <div>
-                      <p className="font-medium text-slate-900">{loan.item?.name}</p>
-                      <p className="text-sm text-slate-500">
-                        {loan.direction === "lent_out" ? "Lent to" : "Borrowed from"}{" "}
-                        {loan.contact?.name} · Due {loan.expected_return_at}
-                      </p>
-                    </div>
-                    <StatusBadge status={loan.status} />
-                  </Link>
-                ))}
-              </div>
-            )}
+                    itemName={loan.item?.name ?? "Item"}
+                    contactName={loan.contact?.name ?? "Contact"}
+                    direction={loan.direction}
+                    dueDate={loan.expected_return_at}
+                    status={loan.status}
+                  />
+                ))
+              )}
+            </section>
           </>
         )}
       </AppShell>

@@ -1,18 +1,124 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: ui-monospace, monospace;
+  --font-heading: var(--font-heading);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-surface: #f8faf6;
+  --color-surface-container-low: #f2f4f0;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e7e9e5;
+  --color-surface-container: #eceeea;
+  --color-primary-container: #2d6a4f;
+  --color-on-primary-container: #a8e7c5;
+  --color-secondary-container: #d4e7de;
+  --color-on-secondary-container: #576861;
+  --color-primary-fixed: #b1f0ce;
+  --color-primary-fixed-dim: #95d4b3;
+  --color-outline-variant: #bfc9c1;
+  --color-outline: #707973;
+  --color-on-surface-variant: #404943;
+  --color-on-surface: #191c1a;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #a8e7c5;
+  --color-on-secondary-container: #576861;
+  --color-error: #ba1a1a;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+:root {
+  --background: #f8faf6;
+  --foreground: #191c1a;
+  --card: #ffffff;
+  --card-foreground: #191c1a;
+  --popover: #ffffff;
+  --popover-foreground: #191c1a;
+  --primary: #0f5238;
+  --primary-foreground: #ffffff;
+  --secondary: #51625b;
+  --secondary-foreground: #ffffff;
+  --muted: #f2f4f0;
+  --muted-foreground: #404943;
+  --accent: #d4e7de;
+  --accent-foreground: #0f1e19;
+  --destructive: #ba1a1a;
+  --border: #bfc9c1;
+  --input: #bfc9c1;
+  --ring: #0f5238;
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: radial-gradient(
+      circle at top center,
+      rgba(177, 240, 206, 0.3) 0%,
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
+  html {
+    @apply font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  .font-heading {
+    font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .card-elevation {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  .card-elevation-hover {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-elevation-hover:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+  }
+  .glass-header {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .glass-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  .active-scale:active {
+    transform: scale(0.98);
+  }
 }

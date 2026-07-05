@@ -1,27 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useProfile } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isLoading, isError } = useProfile();
+  const { session, isLoading } = useAuth();
+  const redirected = useRef(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.replace("/login");
-      }
-    });
-  }, [router]);
-
-  useEffect(() => {
-    if (isError) {
-      router.replace("/login");
-    }
-  }, [isError, router]);
+    if (isLoading || session || redirected.current) return;
+    redirected.current = true;
+    router.replace("/login");
+  }, [isLoading, session, router]);
 
   if (isLoading) {
     return (
@@ -29,6 +21,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         <p className="text-slate-500">Loading...</p>
       </div>
     );
+  }
+
+  if (!session) {
+    return null;
   }
 
   return <>{children}</>;

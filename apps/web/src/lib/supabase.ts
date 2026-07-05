@@ -9,11 +9,11 @@ export const LOAN_SELECT = "*, item:items(*), contact:contacts(*)";
 
 export async function getAuthUser() {
   const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (error || !user) {
+  const user = session?.user;
+  if (!user) {
     throw new Error("Not authenticated");
   }
 

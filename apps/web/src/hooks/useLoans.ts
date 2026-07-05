@@ -2,16 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DashboardSummary, LoanWithRelations } from "@lendtrack/shared-types";
-import { LOAN_SELECT, supabase } from "@/lib/supabase";
-
-async function markOverdueLoans() {
-  const today = new Date().toISOString().split("T")[0];
-  await supabase
-    .from("loans")
-    .update({ status: "overdue" })
-    .eq("status", "active")
-    .lt("expected_return_at", today);
-}
+import { getAuthUser, LOAN_SELECT, supabase } from "@/lib/supabase";
 
 export function useLoans(filters?: {
   status?: string;
@@ -21,8 +12,6 @@ export function useLoans(filters?: {
   return useQuery({
     queryKey: ["loans", filters],
     queryFn: async () => {
-      await markOverdueLoans();
-
       let query = supabase.from("loans").select(LOAN_SELECT).order("expected_return_at");
 
       if (filters?.status) query = query.eq("status", filters.status);
@@ -33,6 +22,8 @@ export function useLoans(filters?: {
       if (error) throw new Error(error.message);
       return data as LoanWithRelations[];
     },
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -57,8 +48,6 @@ export function useDashboardSummary() {
   return useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: async () => {
-      await markOverdueLoans();
-
       const today = new Date().toISOString().split("T")[0];
       const weekLater = new Date();
       weekLater.setDate(weekLater.getDate() + 7);
@@ -106,9 +95,7 @@ export function useCreateLoan() {
       expected_return_at: string;
       notes?: string;
     }) => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getAuthUser();
       if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase
