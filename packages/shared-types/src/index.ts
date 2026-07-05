@@ -1,0 +1,102 @@
+export type Plan = "free" | "premium";
+
+export type LoanDirection = "lent_out" | "borrowed";
+
+export type LoanStatus = "active" | "returned" | "overdue" | "lost";
+
+export type ReminderType = "pre_due" | "overdue" | "weekly_digest";
+
+export type SubscriptionStatus = "active" | "canceled" | "past_due";
+
+export interface NotificationPrefs {
+  email_reminders: boolean;
+  weekly_digest: boolean;
+}
+
+export interface Profile {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  plan: Plan;
+  stripe_customer_id: string | null;
+  notification_prefs: NotificationPrefs;
+  created_at: string;
+}
+
+export interface Contact {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface Item {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  photo_url: string | null;
+  archived: boolean;
+  created_at: string;
+}
+
+export interface Loan {
+  id: string;
+  user_id: string;
+  item_id: string;
+  contact_id: string;
+  direction: LoanDirection;
+  loaned_at: string;
+  expected_return_at: string;
+  returned_at: string | null;
+  status: LoanStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoanWithRelations extends Loan {
+  item?: Item;
+  contact?: Contact;
+}
+
+export interface DashboardSummary {
+  active_count: number;
+  overdue_count: number;
+  upcoming_due: LoanWithRelations[];
+}
+
+export interface ApiError {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    fields?: Record<string, string>;
+  };
+}
+
+export interface ApiSuccess<T> {
+  success: true;
+  data: T;
+}
+
+export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  provider_subscription_id: string;
+  status: SubscriptionStatus;
+  current_period_end: string;
+  created_at: string;
+}
+
+export interface BillingStatus {
+  plan: Plan;
+  subscription: Subscription | null;
+}

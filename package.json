@@ -1,0 +1,20 @@
+{
+  "name": "lendtrack",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@lendtrack/web",
+    "dev:supabase": "supabase start",
+    "db:migrate": "supabase migration up",
+    "db:new": "supabase migration new",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "build": "npm run build --workspace=@lendtrack/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
