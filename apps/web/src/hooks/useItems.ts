@@ -24,11 +24,51 @@ export function useCreateItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: { name: string; category?: string; description?: string }) => {
+    mutationFn: async (body: {
+      name: string;
+      category?: string;
+      description?: string;
+      photo_url?: string | null;
+    }) => {
       const user = await getAuthUser();
       const { data, error } = await supabase
         .from("items")
-        .insert({ user_id: user.id, name: body.name, category: body.category || null, description: body.description || null })
+        .insert({
+          user_id: user.id,
+          name: body.name,
+          category: body.category || null,
+          description: body.description || null,
+          photo_url: body.photo_url || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data as Item;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+}
+
+export function useUpdateItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (body: {
+      id: string;
+      category?: string | null;
+      photo_url?: string | null;
+    }) => {
+      const { id, ...updates } = body;
+      const { data, error } = await supabase
+        .from("items")
+        .update({
+          ...(updates.category !== undefined ? { category: updates.category } : {}),
+          ...(updates.photo_url !== undefined ? { photo_url: updates.photo_url } : {}),
+        })
+        .eq("id", id)
         .select()
         .single();
 

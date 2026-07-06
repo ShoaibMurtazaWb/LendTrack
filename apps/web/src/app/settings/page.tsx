@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CreditCard, ChevronRight } from "lucide-react";
+import { CreditCard, ChevronRight, LogOut } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { PageHeader, PageSkeleton } from "@/components/page-layout";
-import { useProfile, useUpdateProfile } from "@/hooks/useAuth";
+import { QueryErrorState } from "@/components/QueryErrorState";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "next-themes";
+import { useLogout, useProfile, useUpdateProfile } from "@/hooks/useAuth";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,9 +22,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user } = useAuth();
-  const { data: profile, isLoading } = useProfile();
+  const { data: profile, isLoading, isError, refetch } = useProfile();
   const updateProfile = useUpdateProfile();
+  const logout = useLogout();
+  const { theme } = useTheme();
 
   const [fullName, setFullName] = useState("");
   const [emailReminders, setEmailReminders] = useState(true);
@@ -55,13 +62,27 @@ export default function SettingsPage() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout.mutateAsync();
+      router.replace("/login");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to sign out");
+    }
+  };
+
   return (
     <AuthGuard>
       <AppShell>
-        <PageHeader title="Settings" description="Manage your account and preferences" />
+        <PageHeader
+          title="Settings"
+          description="Manage your account, appearance, and preferences"
+        />
 
         {isLoading ? (
           <PageSkeleton />
+        ) : isError ? (
+          <QueryErrorState onRetry={() => refetch()} />
         ) : (
           <div className="mx-auto max-w-lg space-y-6">
             <Card>
@@ -95,6 +116,22 @@ export default function SettingsPage() {
                 <Button onClick={saveProfile} disabled={updateProfile.isPending}>
                   Save profile
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Appearance</CardTitle>
+                <CardDescription>Choose light or dark mode for the app</CardDescription>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label>Theme</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Currently {theme === "dark" ? "dark" : theme === "light" ? "light" : "system"}
+                  </p>
+                </div>
+                <ThemeToggle />
               </CardContent>
             </Card>
 
@@ -156,6 +193,24 @@ export default function SettingsPage() {
                   <ChevronRight className="size-5 text-muted-foreground" />
                 </CardHeader>
               </Link>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Account</CardTitle>
+                <CardDescription>Sign out of LendTrack on this device</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleLogout}
+                  disabled={logout.isPending}
+                >
+                  <LogOut className="size-4" />
+                  {logout.isPending ? "Signing out…" : "Sign out"}
+                </Button>
+              </CardContent>
             </Card>
           </div>
         )}

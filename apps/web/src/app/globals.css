@@ -26,25 +26,9 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-surface: #f8faf6;
-  --color-surface-container-low: #f2f4f0;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-high: #e7e9e5;
-  --color-surface-container: #eceeea;
-  --color-primary-container: #2d6a4f;
-  --color-on-primary-container: #a8e7c5;
-  --color-secondary-container: #d4e7de;
-  --color-on-secondary-container: #576861;
-  --color-primary-fixed: #b1f0ce;
-  --color-primary-fixed-dim: #95d4b3;
-  --color-outline-variant: #bfc9c1;
-  --color-outline: #707973;
-  --color-on-surface-variant: #404943;
-  --color-on-surface: #191c1a;
-  --color-on-primary: #ffffff;
-  --color-on-primary-container: #a8e7c5;
-  --color-on-secondary-container: #576861;
-  --color-error: #ba1a1a;
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-light: var(--brand-green-light);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -53,25 +37,52 @@
 }
 
 :root {
-  --background: #f8faf6;
-  --foreground: #191c1a;
+  --background: #fef7ff;
+  --foreground: #1d1a21;
   --card: #ffffff;
-  --card-foreground: #191c1a;
+  --card-foreground: #1d1a21;
   --popover: #ffffff;
-  --popover-foreground: #191c1a;
-  --primary: #0f5238;
+  --popover-foreground: #1d1a21;
+  --primary: #1a0042;
   --primary-foreground: #ffffff;
-  --secondary: #51625b;
-  --secondary-foreground: #ffffff;
-  --muted: #f2f4f0;
-  --muted-foreground: #404943;
-  --accent: #d4e7de;
-  --accent-foreground: #0f1e19;
+  --secondary: #fea619;
+  --secondary-foreground: #684000;
+  --muted: #f3ebf5;
+  --muted-foreground: #4a4452;
+  --accent: #f8f1fb;
+  --accent-foreground: #1d1a21;
   --destructive: #ba1a1a;
-  --border: #bfc9c1;
-  --input: #bfc9c1;
-  --ring: #0f5238;
+  --border: #ccc3d4;
+  --input: #ccc3d4;
+  --ring: #4c1d95;
   --radius: 0.75rem;
+  --brand-amber: #fea619;
+  --brand-green: #002e1d;
+  --brand-green-light: #b2f0ce;
+  --chart-1: #1a0042;
+  --chart-2: #fea619;
+  --chart-3: #002e1d;
+}
+
+.dark {
+  --background: #141018;
+  --foreground: #f6eef8;
+  --card: #1f1a24;
+  --card-foreground: #f6eef8;
+  --popover: #1f1a24;
+  --popover-foreground: #f6eef8;
+  --primary: #d3bbff;
+  --primary-foreground: #1a0042;
+  --secondary: #ffb95e;
+  --secondary-foreground: #2a1700;
+  --muted: #2a2430;
+  --muted-foreground: #a39aab;
+  --accent: #2a2430;
+  --accent-foreground: #f6eef8;
+  --destructive: #f87171;
+  --border: #3d3648;
+  --input: #3d3648;
+  --ring: #9f7ae4;
 }
 
 @layer base {
@@ -80,12 +91,24 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    background-image: radial-gradient(
-      circle at top center,
-      rgba(177, 240, 206, 0.3) 0%,
-      transparent 60%
-    );
-    background-attachment: fixed;
+  }
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+  input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select,
+  [role="combobox"] {
+    cursor: text;
+  }
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"] {
+    cursor: pointer;
   }
   html {
     @apply font-sans;
@@ -100,25 +123,81 @@
 }
 
 @layer utilities {
-  .card-elevation {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  }
-  .card-elevation-hover {
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
-  }
-  .card-elevation-hover:hover {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
-  }
   .glass-header {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
-  .glass-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  .animate-fade-in {
+    animation: fadeIn 0.35s ease-out;
   }
-  .active-scale:active {
-    transform: scale(0.98);
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .bento-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .bento-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.08);
+  }
+  .rail-active-cutout {
+    position: relative;
+    background: var(--background);
+    border-radius: 24px 0 0 24px;
+    margin-left: 12px;
+  }
+  .rail-active-cutout::before {
+    content: "";
+    position: absolute;
+    top: -20px;
+    right: 0;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border-bottom-right-radius: 20px;
+    box-shadow: 10px 0 0 0 var(--background);
+  }
+  .rail-active-cutout::after {
+    content: "";
+    position: absolute;
+    bottom: -20px;
+    right: 0;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border-top-right-radius: 20px;
+    box-shadow: 10px 0 0 0 var(--background);
+  }
+  /* Active rail pill: inset from left wall; icon stays centered (no nav shift) */
+  .rail-tab-bg {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 8px;
+    right: 0;
+    border-radius: 0.875rem 0 0 0.875rem;
+    background: var(--background);
+    pointer-events: none;
+  }
+  .rail-tab-bg::before,
+  .rail-tab-bg::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    width: 1rem;
+    height: 1rem;
+    background: transparent;
+    pointer-events: none;
+  }
+  .rail-tab-bg::before {
+    top: -1rem;
+    border-bottom-right-radius: 1rem;
+    box-shadow: 0.4rem 0.4rem 0 0.4rem var(--background);
+  }
+  .rail-tab-bg::after {
+    bottom: -1rem;
+    border-top-right-radius: 1rem;
+    box-shadow: 0.4rem -0.4rem 0 0.4rem var(--background);
   }
 }

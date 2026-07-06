@@ -1,82 +1,101 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import {
-  EmptyState,
-  LoanCard,
-  PageHeader,
-  PageSkeleton,
-  StatCard,
-} from "@/components/page-layout";
+  DashboardActivityChart,
+  DashboardMetricTiles,
+  DashboardTopContacts,
+  DashboardUpgradeCard,
+  DashboardWelcome,
+} from "@/components/dashboard/DashboardWidgets";
+import { EmptyState, LoanCard, PageSkeleton } from "@/components/page-layout";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { useDashboardSummary } from "@/hooks/useLoans";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useProfile } from "@/hooks/useAuth";
 
 export default function DashboardPage() {
-  const { data, isLoading } = useDashboardSummary();
+  const { data, isLoading, isError, refetch } = useDashboardSummary();
+  const { data: profile } = useProfile();
+
+  const hasOverdue = (data?.overdue_count ?? 0) > 0;
+  const dueThisWeek = data?.upcoming_due?.length ?? 0;
+  const firstName = profile?.full_name?.split(" ")[0] ?? "there";
 
   return (
     <AuthGuard>
       <AppShell>
-        <PageHeader
-          title="Dashboard"
-          subtitle="The Neighborly Ledger"
-          description="Overview of your active and upcoming loans"
-          action={
+        <div className="animate-fade-in pb-20 md:pb-8">
+          {hasOverdue && (
             <Link
-              href="/loans/new"
-              className={cn(
-                buttonVariants(),
-                "gap-2 rounded-xl shadow-sm active:scale-95"
-              )}
+              href="/loans"
+              className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-red-50 px-5 py-3 text-sm text-destructive transition-colors hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50"
             >
-              <Plus className="size-4" />
-              New loan
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="size-4 shrink-0" />
+                You have <strong>{data?.overdue_count}</strong> overdue loan
+                {(data?.overdue_count ?? 0) > 1 ? "s" : ""} — review on Loans page
+              </span>
+              <span className="font-semibold underline">View loans</span>
             </Link>
-          }
-        />
+          )}
 
-        {isLoading ? (
-          <PageSkeleton />
-        ) : (
-          <>
-            <div className="mb-8 grid grid-cols-2 gap-4">
-              <StatCard label="Active loans" value={data?.active_count ?? 0} />
-              <StatCard
-                label="Overdue"
-                value={data?.overdue_count ?? 0}
-                variant="error"
-              />
-            </div>
+          {isLoading ? (
+            <PageSkeleton />
+          ) : isError ? (
+            <QueryErrorState onRetry={() => refetch()} />
+          ) : (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+              <div className="flex flex-col gap-6 lg:col-span-8">
+                <DashboardWelcome name={firstName} dueCount={dueThisWeek} />
+                <DashboardActivityChart data={data?.activity_week ?? []} />
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                  Due in the next 7 days
-                </h2>
+                <div className="rounded-3xl border border-border bg-card">
+                  <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                    <h2 className="font-heading text-xl font-semibold">Upcoming returns</h2>
+                    <Link href="/loans" className="text-sm font-semibold text-primary hover:underline">
+                      View all
+                    </Link>
+                  </div>
+                  {!data?.upcoming_due?.length ? (
+                    <div className="p-6">
+                      <EmptyState message="No loans due this week." />
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {data.upcoming_due.slice(0, 5).map((loan) => (
+                        <LoanCard
+                          key={loan.id}
+                          href={`/loans/${loan.id}`}
+                          itemName={loan.item?.name ?? "Item"}
+                          item={loan.item}
+                          contactName={loan.contact?.name ?? "Contact"}
+                          direction={loan.direction}
+                          dueDate={loan.expected_return_at}
+                          status={loan.status}
+                          isLocked={loan.is_locked}
+                          variant="list"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {!data?.upcoming_due?.length ? (
-                <EmptyState message="No loans due this week. You're all caught up!" />
-              ) : (
-                data.upcoming_due.map((loan) => (
-                  <LoanCard
-                    key={loan.id}
-                    href={`/loans/${loan.id}`}
-                    itemName={loan.item?.name ?? "Item"}
-                    contactName={loan.contact?.name ?? "Contact"}
-                    direction={loan.direction}
-                    dueDate={loan.expected_return_at}
-                    status={loan.status}
-                  />
-                ))
-              )}
-            </section>
-          </>
-        )}
+              <div className="flex flex-col gap-6 lg:col-span-4">
+                <DashboardMetricTiles
+                  active={data?.active_count ?? 0}
+                  overdue={data?.overdue_count ?? 0}
+                  returned={data?.returned_count ?? 0}
+                />
+                <DashboardUpgradeCard isPremium={profile?.plan === "premium"} />
+                <DashboardTopContacts contacts={data?.top_contacts ?? []} />
+              </div>
+            </div>
+          )}
+        </div>
       </AppShell>
     </AuthGuard>
   );

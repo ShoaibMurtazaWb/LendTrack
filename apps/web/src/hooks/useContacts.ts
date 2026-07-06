@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Contact, LoanWithRelations } from "@lendtrack/shared-types";
+import type { Contact, ContactTrust, LoanWithRelations } from "@lendtrack/shared-types";
 import { getAuthUser, LOAN_SELECT, supabase } from "@/lib/supabase";
 
 export function useContacts() {
@@ -83,6 +83,55 @@ export function useCreateContact() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
+  });
+}
+
+export function useUpdateContact() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...updates
+    }: {
+      id: string;
+      name?: string;
+      email?: string | null;
+      phone?: string | null;
+      notes?: string | null;
+    }) => {
+      const user = await getAuthUser();
+      const { data, error } = await supabase
+        .from("contacts")
+        .update(updates)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data as Contact;
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts", vars.id] });
+      queryClient.invalidateQueries({ queryKey: ["contact-trust", vars.id] });
+    },
+  });
+}
+
+export function useContactTrust(contactId: string) {
+  return useQuery({
+    queryKey: ["contact-trust", contactId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_contact_trust", {
+        p_contact_id: contactId,
+      });
+
+      if (error) throw new Error(error.message);
+      return data as ContactTrust;
+    },
+    enabled: !!contactId,
   });
 }
 

@@ -1,4 +1,9 @@
 import { createAdminClient } from "@/lib/supabase-admin";
+import {
+  sendPremiumEnded,
+  sendPremiumEndingSoon,
+  sendPremiumPaymentFailed,
+} from "@/lib/mail";
 import { getStripe } from "@/lib/stripe";
 import type Stripe from "stripe";
 
@@ -11,6 +16,80 @@ export async function getUserIdFromRequest(request: Request): Promise<string | n
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return null;
   return data.user.id;
+}
+
+async function getUserEmailContext(userId: string) {
+  const supabase = createAdminClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, plan")
+    .eq("id", userId)
+    .single();
+
+  const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+  const email = authUser.user?.email;
+  if (!email) return null;
+
+  return {
+    email,
+    name: profile?.full_name || "",
+    plan: profile?.plan as string | undefined,
+  };
+}
+
+async function getLockedLoanCount(userId: string) {
+  const supabase = createAdminClient();
+  const { count } = await supabase
+    .from("loans")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_locked", true);
+
+  return count ?? 0;
+}
+
+function formatDate(unixSeconds: number) {
+  return new Date(unixSeconds * 1000).toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+async function notifyPremiumEndingSoon(userId: string, endUnix: number) {
+  const ctx = await getUserEmailContext(userId);
+  if (!ctx) return;
+
+  await sendPremiumEndingSoon({
+    to: ctx.email,
+    name: ctx.name,
+    endDate: formatDate(endUnix),
+  });
+}
+
+async function notifyPremiumEnded(userId: string) {
+  const ctx = await getUserEmailContext(userId);
+  if (!ctx) return;
+
+  const lockedCount = await getLockedLoanCount(userId);
+
+  await sendPremiumEnded({
+    to: ctx.email,
+    name: ctx.name,
+    lockedCount,
+  });
+}
+
+async function notifyPaymentFailed(userId: string, amountDue?: string) {
+  const ctx = await getUserEmailContext(userId);
+  if (!ctx) return;
+
+  await sendPremiumPaymentFailed({
+    to: ctx.email,
+    name: ctx.name,
+    amountDue,
+  });
 }
 
 export async function createCheckoutSession(userId: string, email: string): Promise<string | null> {
@@ -60,7 +139,11 @@ export async function cancelSubscription(userId: string): Promise<boolean> {
 
   if (!sub) return false;
 
-  await stripeClient.subscriptions.cancel(sub.provider_subscription_id);
+  // Cancel at period end so user keeps Premium until billing cycle ends
+  await stripeClient.subscriptions.update(sub.provider_subscription_id, {
+    cancel_at_period_end: true,
+  });
+
   return true;
 }
 
@@ -89,9 +172,10 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       );
 
       await supabase.from("profiles").update({ plan: "premium" }).eq("id", userId);
+      await supabase.rpc("apply_loan_plan_locks", { p_user_id: userId });
       break;
     }
-    case "customer.subscription.deleted":
+
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
       const status =
@@ -99,7 +183,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
       const { data: subscription } = await supabase
         .from("subscriptions")
-        .select("user_id")
+        .select("user_id, status")
         .eq("provider_subscription_id", sub.id)
         .single();
 
@@ -113,10 +197,73 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
         })
         .eq("provider_subscription_id", sub.id);
 
-      await supabase
+      const newPlan = status === "active" ? "premium" : "free";
+
+      await supabase.from("profiles").update({ plan: newPlan }).eq("id", subscription.user_id);
+
+      await supabase.rpc("apply_loan_plan_locks", { p_user_id: subscription.user_id });
+
+      // Premium ending soon — user canceled but still active until period end
+      if (sub.cancel_at_period_end && sub.status === "active") {
+        await notifyPremiumEndingSoon(subscription.user_id, sub.current_period_end);
+      }
+
+      // Payment failed — prompt to update card / retry
+      if (status === "past_due" && subscription.status !== "past_due") {
+        await notifyPaymentFailed(subscription.user_id);
+      }
+      break;
+    }
+
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as Stripe.Subscription;
+
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("user_id")
+        .eq("provider_subscription_id", sub.id)
+        .single();
+
+      if (!subscription) return;
+
+      const { data: profileBefore } = await supabase
         .from("profiles")
-        .update({ plan: status === "active" ? "premium" : "free" })
-        .eq("id", subscription.user_id);
+        .select("plan")
+        .eq("id", subscription.user_id)
+        .single();
+
+      await supabase
+        .from("subscriptions")
+        .update({ status: "canceled" })
+        .eq("provider_subscription_id", sub.id);
+
+      await supabase.from("profiles").update({ plan: "free" }).eq("id", subscription.user_id);
+
+      await supabase.rpc("apply_loan_plan_locks", { p_user_id: subscription.user_id });
+
+      if (profileBefore?.plan === "premium") {
+        await notifyPremiumEnded(subscription.user_id);
+      }
+      break;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      if (!invoice.subscription) return;
+
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("user_id")
+        .eq("provider_subscription_id", invoice.subscription as string)
+        .single();
+
+      if (!subscription) return;
+
+      const amountDue = invoice.amount_due
+        ? `$${(invoice.amount_due / 100).toFixed(2)}`
+        : undefined;
+
+      await notifyPaymentFailed(subscription.user_id, amountDue);
       break;
     }
   }

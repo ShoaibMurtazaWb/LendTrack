@@ -63,7 +63,7 @@ lendtrack/
 
 ## Plans
 
-| Tier | Active Loans | Features |
-|------|-------------|----------|
-| Free | 5 | Email reminders |
-| Premium | Unlimited | Weekly digest, priority reminders |
+| Tier    | Active Loans | Features                          |
+| ------- | ------------ | --------------------------------- |
+| Free    | 5            | Email reminders                   |
+| Premium | Unlimited    | Weekly digest, priority reminders |

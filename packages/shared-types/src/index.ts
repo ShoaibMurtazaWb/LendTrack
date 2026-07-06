@@ -30,6 +30,7 @@ export interface Contact {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  linked_user_id: string | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -56,6 +57,7 @@ export interface Loan {
   returned_at: string | null;
   status: LoanStatus;
   notes: string | null;
+  is_locked: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -68,7 +70,45 @@ export interface LoanWithRelations extends Loan {
 export interface DashboardSummary {
   active_count: number;
   overdue_count: number;
+  locked_count: number;
+  returned_count: number;
+  lent_out_count: number;
+  borrowed_count: number;
   upcoming_due: LoanWithRelations[];
+  top_contacts: { id: string; name: string; score: number; loans: number }[];
+  activity_week: { label: string; value: number }[];
+}
+
+export interface ContactTrust {
+  trust_score: number | null;
+  total_loans: number;
+  completed_loans?: number;
+  returned_on_time: number;
+  returned_late?: number;
+  overdue: number;
+  lost: number;
+  active: number;
+  is_verified_neighbor: boolean;
+  has_score?: boolean;
+  rating_label: string;
+}
+
+export interface LoginSession {
+  id: string;
+  user_id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  device_label: string | null;
+  location_hint: string | null;
+  created_at: string;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ApiError {
@@ -99,4 +139,31 @@ export interface Subscription {
 export interface BillingStatus {
   plan: Plan;
   subscription: Subscription | null;
+}
+
+export interface Conversation {
+  id: string;
+  user_one_id: string;
+  user_two_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface ConversationPreview {
+  conversation_id: string;
+  other_user_id: string;
+  contact_id: string | null;
+  contact_name: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread_count: number;
 }

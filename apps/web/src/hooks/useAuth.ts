@@ -60,8 +60,19 @@ export function useLogin() {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+
+      if (data.session?.access_token) {
+        void fetch("/api/auth/login-notification", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+          body: JSON.stringify({ userAgent: navigator.userAgent }),
+        }).catch(() => {});
+      }
     },
   });
 }
@@ -103,6 +114,27 @@ export function useLogout() {
     },
     onSuccess: () => {
       queryClient.clear();
+    },
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${origin}/auth/reset-password`,
+      });
+      if (error) throw new Error(error.message);
+    },
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: async (password: string) => {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw new Error(error.message);
     },
   });
 }

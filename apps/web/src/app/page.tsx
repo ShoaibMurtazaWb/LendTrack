@@ -1,70 +1,98 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
-import { Handshake, Shield, Bell, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Shield, Bell, Users } from "lucide-react";
+import { LendTrackLogoFull, LendTrackLogoMark } from "@/components/LendTrackLogo";
 import { buttonVariants } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
 export default function HomePage() {
+  const router = useRouter();
+  const { session, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && session) {
+      router.replace("/dashboard");
+    }
+  }, [isLoading, session, router]);
+
+  if (isLoading || session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-primary/15">
+            <LendTrackLogoMark size={40} className="animate-pulse" />
+          </div>
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen">
-      <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-outline-variant bg-surface/80 px-4 shadow-sm glass-header md:px-8">
-        <span className="font-heading text-xl font-semibold text-primary">LendTrack</span>
-        <nav className="hidden items-center gap-6 md:flex">
-          <span className="text-sm font-bold text-primary">Features</span>
-          <span className="text-sm font-semibold text-on-surface-variant">Privacy First</span>
-        </nav>
-        <Link
-          href="/settings/billing"
-          className="hidden rounded-full bg-primary px-6 py-2 text-sm font-bold text-on-primary md:inline-flex"
-        >
-          Premium
+    <div className="min-h-screen bg-background">
+      <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-border/60 bg-background/85 px-4 glass-header md:px-8">
+        <Link href="/" aria-label="LendTrack home">
+          <LendTrackLogoFull height={32} />
         </Link>
+        <nav className="hidden items-center gap-6 md:flex">
+          <a href="#features" className="text-sm font-semibold text-muted-foreground hover:text-foreground">
+            Features
+          </a>
+          <span className="text-sm font-semibold text-muted-foreground">Privacy first</span>
+        </nav>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link
+            href="/login"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}
+          >
+            Log in
+          </Link>
+          <Link href="/register" className={cn(buttonVariants({ size: "sm" }), "rounded-xl")}>
+            Get started
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-24 pt-32 md:px-8">
         <section className="mb-10 flex flex-col items-center text-center">
-          <div className="relative mb-6 size-28 md:size-36">
-            <div className="absolute inset-0 rounded-xl bg-primary-fixed opacity-20 blur-2xl" />
-            <div className="relative flex size-full items-center justify-center rounded-xl bg-primary-container shadow-md">
-              <Handshake className="size-14 text-on-primary-container md:size-16" />
-            </div>
+          <div className="relative mb-6">
+            <LendTrackLogoFull height={72} className="md:h-[88px] md:w-auto" />
           </div>
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-on-background md:text-5xl">
-            LendTrack
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg text-on-surface-variant">
+          <h1 className="sr-only">LendTrack</h1>
+          <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
             Track what you lend. Remember what you borrow.
             <br className="hidden md:block" /> A neighborly ledger built for communal trust.
           </p>
           <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Link
               href="/register"
-              className={cn(
-                buttonVariants({ size: "lg" }),
-                "rounded-full px-10 py-6 text-base font-bold shadow-md active:scale-95"
-              )}
+              className={cn(buttonVariants({ size: "lg" }), "rounded-xl px-10 shadow-md")}
             >
-              Get started
+              Create free account
             </Link>
             <Link
               href="/login"
-              className={cn(
-                buttonVariants({ size: "lg", variant: "outline" }),
-                "rounded-full border-2 border-outline-variant px-10 py-6 text-base font-bold text-primary active:scale-95"
-              )}
+              className={cn(buttonVariants({ size: "lg", variant: "outline" }), "rounded-xl px-10")}
             >
               Log in
             </Link>
           </div>
         </section>
 
-        <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          <div className="card-elevation md:col-span-2 flex flex-col justify-between rounded-xl border border-outline-variant bg-surface-container-low p-6">
+        <section id="features" className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-col justify-between rounded-2xl border border-border/60 bg-card p-6 shadow-sm md:col-span-2">
             <div>
-              <div className="mb-4 flex size-12 items-center justify-center rounded-lg bg-primary-fixed/20 text-primary">
-                <Handshake className="size-6" />
+              <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-primary/10">
+                <LendTrackLogoMark size={32} />
               </div>
-              <h3 className="font-heading text-xl font-semibold text-on-surface">Built on Trust</h3>
-              <p className="mt-2 text-on-surface-variant">
+              <h3 className="font-heading text-xl font-semibold">Built on trust</h3>
+              <p className="mt-2 text-muted-foreground">
                 Manage exchanges with neighbors, friends, and family with transparency and gentle
                 reminders.
               </p>
@@ -73,7 +101,7 @@ export default function HomePage() {
               {[Users, Users, Users].map((Icon, i) => (
                 <div
                   key={i}
-                  className="flex size-10 items-center justify-center rounded-full border-2 border-surface bg-secondary-container text-xs font-bold text-primary"
+                  className="flex size-10 items-center justify-center rounded-full border-2 border-background bg-secondary text-primary"
                 >
                   <Icon className="size-4" />
                 </div>
@@ -81,53 +109,49 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="card-elevation rounded-xl border border-outline-variant bg-surface-container-high/30 p-6">
-            <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-secondary-container/50 text-secondary">
+          <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
+            <div className="mb-4 flex size-10 items-center justify-center rounded-xl bg-secondary text-primary">
               <Shield className="size-5" />
             </div>
-            <h4 className="font-bold text-on-surface">Private by Design</h4>
-            <p className="mt-2 text-sm text-on-surface-variant">
+            <h4 className="font-bold">Private by design</h4>
+            <p className="mt-2 text-sm text-muted-foreground">
               Your neighborhood exchanges stay between you. No invasive tracking.
             </p>
           </div>
 
-          <div className="card-elevation flex flex-col justify-between rounded-xl border border-primary/20 bg-primary-container p-6 text-on-primary-container">
+          <div className="flex flex-col justify-between rounded-2xl border border-primary/30 bg-primary p-6 text-primary-foreground shadow-sm">
             <div>
-              <div className="mb-4 flex size-10 items-center justify-center rounded-lg bg-on-primary-container/20">
+              <div className="mb-4 flex size-10 items-center justify-center rounded-xl bg-primary-foreground/20">
                 <Bell className="size-5" />
               </div>
-              <h4 className="font-bold">Gentle Nudges</h4>
+              <h4 className="font-bold">Gentle nudges</h4>
               <p className="mt-2 text-sm opacity-90">
                 Auto-reminders that feel like a friendly tap on the shoulder.
               </p>
             </div>
-            <div className="mt-4 rounded-lg bg-white/10 p-2 text-xs">
+            <div className="mt-4 rounded-lg bg-primary-foreground/10 p-2 text-xs">
               Reminder: &quot;That drill? 😉&quot;
             </div>
           </div>
         </section>
-
-        <section className="mt-16 flex flex-wrap items-center justify-around gap-6 border-y border-outline-variant/30 py-8 opacity-60">
-          {["Neighborly Weekly", "The Ledger Times", "TrustPilot 4.9", "Communal Living"].map(
-            (name) => (
-              <span key={name} className="font-heading text-sm italic text-on-surface-variant">
-                {name}
-              </span>
-            )
-          )}
-        </section>
       </main>
 
-      <footer className="border-t border-outline-variant bg-surface-container-low px-4 py-8 md:px-8">
+      <footer className="border-t border-border/60 bg-muted/30 px-4 py-8 md:px-8">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 md:flex-row">
           <div>
-            <span className="font-bold text-primary">LendTrack</span>
-            <p className="text-sm text-on-surface-variant">© 2024 LendTrack. Neighborhood organized.</p>
+            <LendTrackLogoFull height={24} />
+            <p className="text-sm text-muted-foreground">© 2026 LendTrack. Neighborhood organized.</p>
           </div>
-          <div className="flex gap-6 text-xs font-bold text-on-surface-variant">
-            <span>Privacy</span>
-            <span>Terms</span>
-            <span>Support</span>
+          <div className="flex gap-6 text-xs font-semibold text-muted-foreground">
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <a href="mailto:support@lendtrack.app" className="hover:text-foreground">
+              Support
+            </a>
           </div>
         </div>
       </footer>

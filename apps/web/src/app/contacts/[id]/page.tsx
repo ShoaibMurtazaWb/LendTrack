@@ -1,14 +1,23 @@
 "use client";
 
-import { use, useState } from "react";
+import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Mail, Phone, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, MessageSquare, Phone, Trash2, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
-import { EmptyState, PageHeader, PageSkeleton, StatusBadge } from "@/components/page-layout";
-import { useContact, useContactLoans, useDeleteContact } from "@/hooks/useContacts";
+import { Pagination, paginateArray } from "@/components/Pagination";
+import { ContactChat } from "@/components/messaging/ContactChat";
+import {
+  EmptyState,
+  PageHeader,
+  PageSkeleton,
+  StatusBadge,
+  TrustScoreCard,
+} from "@/components/page-layout";
+import { useContact, useContactLoans, useContactTrust, useDeleteContact } from "@/hooks/useContacts";
+import { useNewLoanDialog } from "@/components/loans/NewLoanDialogProvider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -23,22 +32,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+const LOAN_PAGE_SIZE = 5;
+
+function ContactDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const { data: contact, isLoading: contactLoading } = useContact(id);
   const { data: loans, isLoading: loansLoading } = useContactLoans(id);
+  const { data: trust, isLoading: trustLoading } = useContactTrust(id);
   const deleteContact = useDeleteContact();
+  const { openNewLoan } = useNewLoanDialog();
   const [showDelete, setShowDelete] = useState(false);
+  const [loanPage, setLoanPage] = useState(1);
+
+  const paginatedLoans = loans ? paginateArray(loans, loanPage, LOAN_PAGE_SIZE) : null;
 
   const handleDelete = async () => {
     try {
       const result = await deleteContact.mutateAsync(id);
-      if (result.type === "archived") {
-        toast.success("Contact removed. Their loan history is still saved.");
-      } else {
-        toast.success("Contact deleted");
-      }
+      toast.success(
+        result.type === "archived"
+          ? "Contact removed. Their loan history is still saved."
+          : "Contact deleted"
+      );
       router.push("/contacts");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove contact");
@@ -48,29 +63,35 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const isLoading = contactLoading || loansLoading;
 
   return (
-    <AuthGuard>
-      <AppShell>
-        <PageHeader
-          title={contact?.name ?? "Contact"}
-          description="All loans you've tracked with this person"
-          action={
+    <>
+      <PageHeader
+        title={contact?.name ?? "Contact"}
+        description="Trust profile and loan history — make informed lending decisions"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/contacts"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2 rounded-full")}
+              href={`/messages/${id}`}
+              className={cn(buttonVariants({ size: "sm" }), "gap-2 rounded-xl")}
             >
+              <MessageSquare className="size-4" />
+              Message
+            </Link>
+            <Link href="/contacts" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2")}>
               <ArrowLeft className="size-4" />
               All contacts
             </Link>
-          }
-        />
+          </div>
+        }
+      />
 
-        {isLoading ? (
-          <PageSkeleton />
-        ) : !contact ? (
-          <EmptyState message="Contact not found." href="/contacts" linkLabel="Back to contacts" />
-        ) : (
-          <div className="space-y-6">
-            <Card className="border-border/60 bg-card/80 shadow-sm">
+      {isLoading ? (
+        <PageSkeleton />
+      ) : !contact ? (
+        <EmptyState message="Contact not found." href="/contacts" linkLabel="Back to contacts" />
+      ) : (
+        <div className="animate-fade-in space-y-6 pb-8">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="rounded-2xl border-border/60 shadow-sm">
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
                   <CardTitle className="font-heading text-2xl">{contact.name}</CardTitle>
@@ -88,6 +109,12 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       </span>
                     )}
                   </CardDescription>
+                  {contact.linked_user_id && (
+                    <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-primary">
+                      <ShieldCheck className="size-4" />
+                      Registered on LendTrack — mutual contact
+                    </p>
+                  )}
                 </div>
                 <Button
                   variant="outline"
@@ -96,7 +123,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   onClick={() => setShowDelete(true)}
                 >
                   <Trash2 className="size-4" />
-                  Remove
                 </Button>
               </CardHeader>
               {contact.notes && (
@@ -106,30 +132,37 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               )}
             </Card>
 
-            <div>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-heading text-lg font-semibold">Loans with {contact.name}</h2>
-                <Link
-                  href={`/loans/new?contact=${id}`}
-                  className={cn(buttonVariants({ size: "sm" }), "rounded-full")}
-                >
-                  New loan
-                </Link>
-              </div>
+            <TrustScoreCard trust={trust} loading={trustLoading} />
+          </div>
 
-              {!loans?.length ? (
-                <EmptyState
-                  message={`No loans recorded with ${contact.name} yet.`}
-                  href={`/loans/new?contact=${id}`}
-                  linkLabel="Create loan"
-                />
-              ) : (
+          <ContactChat
+            contactId={contact.id}
+            contactName={contact.name}
+            linkedUserId={contact.linked_user_id}
+          />
+
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-heading text-lg font-semibold">Loans with {contact.name}</h2>
+              <Button type="button" size="sm" className="rounded-xl" onClick={() => openNewLoan(id)}>
+                New loan
+              </Button>
+            </div>
+
+            {!loans?.length ? (
+              <EmptyState
+                message={`No loans recorded with ${contact.name} yet.`}
+                onAction={() => openNewLoan(id)}
+                actionLabel="Create loan"
+              />
+            ) : (
+              <>
                 <div className="space-y-2">
-                  {loans.map((loan) => (
-                    <Card key={loan.id} className="border-border/60 bg-card/80 transition-colors hover:border-primary/30">
+                  {paginatedLoans!.data.map((loan) => (
+                    <Card key={loan.id} className="rounded-xl border-border/60 transition-colors hover:border-primary/30">
                       <Link href={`/loans/${loan.id}`} className="flex items-center justify-between p-4">
                         <div>
-                          <p className="font-medium">{loan.item?.name}</p>
+                          <p className="font-semibold">{loan.item?.name}</p>
                           <p className="text-sm text-muted-foreground">
                             {loan.direction === "lent_out" ? "You lent" : "You borrowed"} · Due{" "}
                             {loan.expected_return_at}
@@ -140,32 +173,49 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     </Card>
                   ))}
                 </div>
-              )}
-            </div>
+                <Pagination
+                  className="mt-4"
+                  page={paginatedLoans!.page}
+                  totalPages={paginatedLoans!.totalPages}
+                  total={paginatedLoans!.total}
+                  pageSize={LOAN_PAGE_SIZE}
+                  onPageChange={setLoanPage}
+                />
+              </>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remove {contact?.name}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {loans?.length
-                  ? "They have loan history — the contact will be hidden but loans stay on your records."
-                  : "This contact has no loans and will be deleted permanently."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                className="bg-destructive text-white hover:bg-destructive/90"
-              >
-                Remove contact
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {contact?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {loans?.length
+                ? "They have loan history — the contact will be hidden but loans stay on your records."
+                : "This contact has no loans and will be deleted permanently."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Remove contact
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+
+  return (
+    <AuthGuard>
+      <AppShell>
+        <ContactDetailContent id={id} />
       </AppShell>
     </AuthGuard>
   );

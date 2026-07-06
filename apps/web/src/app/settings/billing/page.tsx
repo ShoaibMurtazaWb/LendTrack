@@ -51,9 +51,9 @@ const PLANS = [
     description: "For power lenders & borrowers",
     features: [
       "Unlimited active loans",
-      "Priority email reminders",
-      "Weekly digest emails",
-      "Export loan history (coming soon)",
+      "All loans stay editable on Premium",
+      "Email due-date reminders",
+      "Support ongoing feature rollouts",
     ],
     cta: "Upgrade to Premium",
     highlighted: true,
@@ -89,10 +89,7 @@ export default function BillingPage() {
         window.location.href = res.url;
         return;
       }
-      toast.error(
-        res.error ||
-          "Stripe is not configured yet. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID_PREMIUM to enable checkout."
-      );
+      toast.error(res.error || "Checkout is unavailable. Please try again later or contact support.");
     } catch {
       toast.error("Could not start checkout. Please try again later.");
     } finally {
@@ -204,7 +201,7 @@ export default function BillingPage() {
                         )
                       ) : (
                         <Button variant="secondary" className="w-full" disabled={isCurrent}>
-                          {isCurrent ? "Current plan" : "Downgrade via canceling Premium"}
+                          {isCurrent ? "Current plan" : "Included with Free"}
                         </Button>
                       )}
                     </CardFooter>
@@ -223,15 +220,12 @@ export default function BillingPage() {
                   be redirected to Stripe Checkout (secure payment).
                 </p>
                 <p>
-                  <strong className="text-foreground">Step 2:</strong> After payment, your plan updates automatically
-                  and the 5-loan limit is removed.
+                  <strong className="text-foreground">Step 2:</strong> After payment, your plan updates
+                  automatically, locked loans are unlocked, and the 5-loan limit is removed.
                 </p>
                 <p>
-                  <strong className="text-foreground">Step 3:</strong> Enable weekly digest in Settings → Notifications.
-                </p>
-                <p className="text-xs">
-                  Stripe must be configured in your environment for checkout to work. Until then, contact the
-                  developer to enable billing.
+                  <strong className="text-foreground">Step 3:</strong> Manage reminders and preferences
+                  anytime in Settings.
                 </p>
               </CardContent>
             </Card>

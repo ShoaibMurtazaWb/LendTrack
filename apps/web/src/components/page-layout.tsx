@@ -1,24 +1,197 @@
 import Link from "next/link";
-import { ChevronRight, Handshake } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { ChevronRight, Lock, Shield, ShieldCheck } from "lucide-react";
+import type { ContactTrust, Item } from "@lendtrack/shared-types";
+import { ItemThumbnail } from "@/components/ItemThumbnail";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<string, string> = {
-  active: "bg-primary/10 text-primary",
-  overdue: "bg-error/10 text-error",
-  returned: "bg-secondary-container text-on-secondary-container",
-  lost: "bg-surface-container text-on-surface-variant",
+  active: "bg-brand-green-light/50 text-brand-green",
+  overdue: "bg-red-100 text-destructive dark:bg-red-950/40",
+  returned: "bg-muted text-muted-foreground",
+  lost: "bg-muted text-muted-foreground",
+};
+
+const statusHints: Record<string, string> = {
+  active: "Loan is still open",
+  overdue: "Past due date, not yet returned",
+  returned: "Item was returned",
+  lost: "Item was not returned and marked as lost or unrecoverable",
 };
 
 export function StatusBadge({ status }: { status: string }) {
+  const hint = statusHints[status];
   return (
     <span
+      title={hint}
       className={cn(
-        "inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold capitalize",
-        statusStyles[status] ?? "bg-surface-container text-on-surface-variant"
+        "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
+        statusStyles[status] ?? "bg-muted text-muted-foreground"
       )}
     >
       {status}
+    </span>
+  );
+}
+
+export function LockedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">
+      <Lock className="size-3" />
+      Locked
+    </span>
+  );
+}
+
+export function AnalyticsStat({
+  label,
+  value,
+  hint,
+  variant = "default",
+  icon,
+}: {
+  label: string;
+  value: number | string;
+  hint?: string;
+  variant?: "default" | "success" | "warning" | "danger";
+  icon?: React.ReactNode;
+}) {
+  const variants = {
+    default: "border-border/60 bg-card",
+    success: "border-primary/30 bg-primary/5",
+    warning: "border-amber-500/30 bg-amber-500/5",
+    danger: "border-destructive/30 bg-destructive/5",
+  };
+
+  return (
+    <div className={cn("rounded-2xl border p-5 shadow-sm transition-all hover:shadow-md", variants[variant])}>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
+        {icon}
+      </div>
+      <p className="font-heading text-3xl font-bold tracking-tight md:text-4xl">{value}</p>
+      {hint && <p className="mt-1 text-sm text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+export function TrustScoreCard({ trust, loading }: { trust?: ContactTrust | null; loading?: boolean }) {
+  if (loading) {
+    return <div className="h-48 animate-pulse rounded-xl bg-muted" />;
+  }
+  if (!trust) return null;
+
+  const hasScore = trust.has_score !== false && trust.trust_score != null;
+  const score = trust.trust_score ?? 0;
+
+  const scoreColor = !hasScore
+    ? "text-muted-foreground"
+    : score >= 85
+      ? "text-primary"
+      : score >= 70
+        ? "text-emerald-600 dark:text-emerald-400"
+        : score >= 50
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-destructive";
+
+  const barColor = !hasScore
+    ? "bg-muted-foreground/30"
+    : score >= 85
+      ? "bg-primary"
+      : score >= 70
+        ? "bg-emerald-500"
+        : score >= 50
+          ? "bg-amber-500"
+          : "bg-destructive";
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-heading text-lg font-semibold">
+            <Shield className="size-5 text-primary" />
+            Trust score
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Based on completed loans only — returned, overdue, or lost. Active loans are not scored.
+          </p>
+        </div>
+        {trust.is_verified_neighbor && (
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <ShieldCheck className="size-3.5" />
+            Verified neighbor
+          </span>
+        )}
+      </div>
+
+      {hasScore ? (
+        <>
+          <div className="flex items-end gap-4">
+            <span className={cn("font-heading text-5xl font-semibold", scoreColor)}>{score}</span>
+            <span className="mb-2 text-lg font-medium text-muted-foreground">/ 100 · {trust.rating_label}</span>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn("h-full rounded-full transition-all duration-700", barColor)}
+              style={{ width: `${score}%` }}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="rounded-lg bg-muted/50 px-4 py-6 text-center">
+          <p className="font-medium text-muted-foreground">No history yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Score appears after a loan is returned, marked overdue, or lost.
+          </p>
+        </div>
+      )}
+
+      <div className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+        <div>
+          <span className="text-muted-foreground">Completed</span>
+          <p className="font-semibold">{trust.completed_loans ?? 0}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground">On time</span>
+          <p className="font-semibold">{trust.returned_on_time}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Returned late</span>
+          <p className="font-semibold">{trust.returned_late ?? 0}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Overdue</span>
+          <p className="font-semibold">{trust.overdue}</p>
+        </div>
+        <div title="Item was not returned and marked as lost or unrecoverable">
+          <span className="text-muted-foreground">Lost</span>
+          <p className="font-semibold">{trust.lost}</p>
+        </div>
+        <div title="Open loans — shown for context, not included in score">
+          <span className="text-muted-foreground">In progress</span>
+          <p className="font-semibold">{trust.active ?? 0}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const directionStyles: Record<string, string> = {
+  lent_out: "bg-brand-green-light text-brand-green",
+  borrowed: "bg-secondary/30 text-secondary-foreground",
+};
+
+export function DirectionBadge({ direction }: { direction: string }) {
+  const label = direction === "lent_out" ? "Lent out" : "Borrowed";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold",
+        directionStyles[direction] ?? "bg-surface-container text-on-surface-variant"
+      )}
+    >
+      {label}
     </span>
   );
 }
@@ -37,14 +210,14 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight text-on-surface md:text-3xl">
+        <h1 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
           {title}
         </h1>
         {subtitle && (
-          <p className="mt-1 text-sm italic text-on-surface-variant">{subtitle}</p>
+          <p className="mt-1 text-sm font-medium text-primary">{subtitle}</p>
         )}
         {description && (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-on-surface-variant">
+          <p className="mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground">
             {description}
           </p>
         )}
@@ -95,17 +268,23 @@ export function StatCard({
 export function LoanCard({
   href,
   itemName,
+  item,
   contactName,
   direction,
   dueDate,
   status,
+  isLocked = false,
+  variant = "card",
 }: {
   href: string;
   itemName: string;
+  item?: Pick<Item, "name" | "photo_url" | "category"> | null;
   contactName: string;
   direction: string;
   dueDate: string;
   status: string;
+  isLocked?: boolean;
+  variant?: "card" | "list";
 }) {
   const isOverdue = status === "overdue";
   const directionLabel = direction === "lent_out" ? "Lent to" : "Borrowed from";
@@ -113,22 +292,34 @@ export function LoanCard({
   return (
     <Link
       href={href}
-      className="card-elevation card-elevation-hover flex items-center gap-4 rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-4 transition-colors hover:border-primary/40 active:scale-[0.99]"
+      className={cn(
+        "flex items-center gap-4 p-4 transition-colors hover:bg-muted/40 active:scale-[0.99]",
+        variant === "card" && "rounded-2xl border border-border bg-card shadow-sm hover:border-primary/30 hover:shadow-md",
+        variant === "list" && status === "overdue" && "bg-red-50/50 dark:bg-red-950/20",
+        isLocked && "opacity-60"
+      )}
     >
-      <div className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-surface-container-high text-primary">
-        <Handshake className="size-6" />
-      </div>
+      <ItemThumbnail
+        name={item?.name ?? itemName}
+        photoUrl={item?.photo_url}
+        category={item?.category}
+        size="md"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="truncate font-semibold text-on-surface">{itemName}</h3>
-          <StatusBadge status={status} />
+          <h3 className="truncate text-base font-semibold">{itemName}</h3>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {isLocked && <LockedBadge />}
+            <DirectionBadge direction={direction} />
+            <StatusBadge status={status} />
+          </div>
         </div>
-        <p className="text-sm text-on-surface-variant">
+        <p className="text-sm text-muted-foreground">
           {directionLabel} {contactName} ·{" "}
-          <span className={cn(isOverdue && "font-medium text-error")}>Due {dueDate}</span>
+          <span className={cn(isOverdue && "font-medium text-destructive")}>Due {dueDate}</span>
         </p>
       </div>
-      <ChevronRight className="size-5 shrink-0 text-outline-variant" />
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
     </Link>
   );
 }
@@ -137,15 +328,24 @@ export function EmptyState({
   message,
   href,
   linkLabel,
+  onAction,
+  actionLabel,
 }: {
   message: string;
   href?: string;
   linkLabel?: string;
+  onAction?: () => void;
+  actionLabel?: string;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-outline-variant bg-surface-container-low/30 px-6 py-14 text-center">
-      <p className="mx-auto max-w-sm text-on-surface-variant">{message}</p>
-      {href && linkLabel && (
+    <div className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
+      <p className="mx-auto max-w-sm text-muted-foreground">{message}</p>
+      {onAction && actionLabel && (
+        <Button type="button" onClick={onAction} className="mt-5 rounded-xl active:scale-95">
+          {actionLabel}
+        </Button>
+      )}
+      {!onAction && href && linkLabel && (
         <Link
           href={href}
           className={cn(buttonVariants(), "mt-5 rounded-xl active:scale-95")}
@@ -160,12 +360,12 @@ export function EmptyState({
 export function PageSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="h-10 w-56 animate-pulse rounded-lg bg-surface-container" />
+      <div className="h-10 w-56 animate-pulse rounded-lg bg-muted" />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="h-28 animate-pulse rounded-xl bg-surface-container" />
-        <div className="h-28 animate-pulse rounded-xl bg-surface-container" />
+        <div className="h-28 animate-pulse rounded-xl bg-muted" />
+        <div className="h-28 animate-pulse rounded-xl bg-muted" />
       </div>
-      <div className="h-24 animate-pulse rounded-xl bg-surface-container" />
+      <div className="h-24 animate-pulse rounded-xl bg-muted" />
     </div>
   );
 }
@@ -178,15 +378,16 @@ export function DirectionToggle({
   onChange: (v: "lent_out" | "borrowed") => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-xl border border-outline-variant bg-surface-container-high p-1">
+    <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/50 p-1">
       <button
         type="button"
         onClick={() => onChange("lent_out")}
+        aria-pressed={value === "lent_out"}
         className={cn(
-          "rounded-lg py-2.5 text-sm font-semibold transition-all active:scale-95",
+          "cursor-pointer rounded-lg py-2.5 text-sm font-semibold transition-all active:scale-95",
           value === "lent_out"
-            ? "bg-primary text-on-primary shadow-sm"
-            : "text-on-surface-variant hover:bg-surface-container-lowest/50"
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-background/80"
         )}
       >
         Lent out
@@ -194,11 +395,12 @@ export function DirectionToggle({
       <button
         type="button"
         onClick={() => onChange("borrowed")}
+        aria-pressed={value === "borrowed"}
         className={cn(
-          "rounded-lg py-2.5 text-sm font-semibold transition-all active:scale-95",
+          "cursor-pointer rounded-lg py-2.5 text-sm font-semibold transition-all active:scale-95",
           value === "borrowed"
-            ? "bg-primary text-on-primary shadow-sm"
-            : "text-on-surface-variant hover:bg-surface-container-lowest/50"
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-background/80"
         )}
       >
         Borrowed

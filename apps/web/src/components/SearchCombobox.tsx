@@ -21,6 +21,8 @@ type SearchComboboxProps = {
   hint?: string;
   disabled?: boolean;
   id?: string;
+  renderOptionStart?: (option: SearchComboboxOption) => React.ReactNode;
+  onCreateSelect?: (query: string) => void;
 };
 
 export function SearchCombobox({
@@ -33,6 +35,8 @@ export function SearchCombobox({
   hint,
   disabled,
   id,
+  renderOptionStart,
+  onCreateSelect,
 }: SearchComboboxProps) {
   const listId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +87,11 @@ export function SearchCombobox({
   };
 
   const selectCreate = () => {
-    onValueChange(query, null);
+    if (onCreateSelect) {
+      onCreateSelect(query);
+    } else {
+      onValueChange(query, null);
+    }
     setOpen(false);
     setActiveIndex(-1);
   };
@@ -120,7 +128,7 @@ export function SearchCombobox({
     }
   };
 
-  const showDropdown = open && listItems.length > 0;
+  const showDropdown = open && (listItems.length > 0 || query.length === 0);
 
   return (
     <div ref={containerRef} className="relative">
@@ -128,14 +136,14 @@ export function SearchCombobox({
         id={id}
         type="text"
         role="combobox"
-        aria-expanded={showDropdown}
+        aria-expanded={showDropdown && listItems.length > 0}
         aria-controls={listId}
         aria-autocomplete="list"
         autoComplete="off"
         disabled={disabled}
         placeholder={placeholder}
         value={value}
-        className="h-12 w-full rounded-xl border-outline-variant bg-white pl-3 text-base md:text-sm"
+        className="h-12 w-full cursor-text rounded-xl border-border bg-background pl-3 text-base md:text-sm"
         onChange={(e) => handleInputChange(e.target.value)}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
@@ -147,14 +155,21 @@ export function SearchCombobox({
           role="listbox"
           className="absolute z-[100] mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
-          {listItems.map((item, index) => {
+          {listItems.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-muted-foreground">
+              {options.length === 0
+                ? "No saved entries yet — type a name to add one"
+                : "Type to search or pick from the list"}
+            </li>
+          ) : (
+            listItems.map((item, index) => {
             if (item.type === "create") {
               return (
                 <li key={item.id} role="option" aria-selected={activeIndex === index}>
                   <button
                     type="button"
                     className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent",
+                      "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent",
                       activeIndex === index && "bg-accent"
                     )}
                     onMouseDown={(e) => e.preventDefault()}
@@ -173,18 +188,20 @@ export function SearchCombobox({
                 <button
                   type="button"
                   className={cn(
-                    "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent",
+                    "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent",
                     (activeIndex === index || isSelected) && "bg-accent/60"
                   )}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => selectOption(item)}
                 >
-                  <span className="truncate">{item.label}</span>
+                  {renderOptionStart?.(item)}
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   {isSelected && <Check className="size-4 shrink-0 text-primary" />}
                 </button>
               </li>
             );
-          })}
+          })
+          )}
         </ul>
       )}
 

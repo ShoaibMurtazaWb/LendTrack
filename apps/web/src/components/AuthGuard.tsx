@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { LendTrackLogoMark } from "@/components/LendTrackLogo";
 import { useAuth } from "@/providers/AuthProvider";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -17,8 +18,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-slate-500">Loading...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <LendTrackLogoMark size={40} className="animate-pulse" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
       </div>
     );
   }
