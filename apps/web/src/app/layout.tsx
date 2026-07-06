@@ -33,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${ibmPlexSans.variable} ${literata.variable} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className={`${ibmPlexSans.variable} ${literata.variable} h-full scroll-smooth antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
         <QueryProvider>
           <ThemeProvider>

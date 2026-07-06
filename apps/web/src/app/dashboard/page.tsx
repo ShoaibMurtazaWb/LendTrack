@@ -5,7 +5,8 @@ import { AlertTriangle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import {
-  DashboardActivityChart,
+  DashboardDirectionChart,
+  DashboardStatusChart,
   DashboardMetricTiles,
   DashboardTopContacts,
   DashboardUpgradeCard,
@@ -50,7 +51,18 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
               <div className="flex flex-col gap-6 lg:col-span-8">
                 <DashboardWelcome name={firstName} dueCount={dueThisWeek} />
-                <DashboardActivityChart data={data?.activity_week ?? []} />
+                <div className="grid gap-6 md:grid-cols-2">
+                  <DashboardStatusChart
+                    active={data?.active_count ?? 0}
+                    overdue={data?.overdue_count ?? 0}
+                    returned={data?.returned_count ?? 0}
+                    locked={data?.locked_count ?? 0}
+                  />
+                  <DashboardDirectionChart
+                    lentOut={data?.lent_out_count ?? 0}
+                    borrowed={data?.borrowed_count ?? 0}
+                  />
+                </div>
 
                 <div className="rounded-3xl border border-border bg-card">
                   <div className="flex items-center justify-between border-b border-border px-6 py-4">

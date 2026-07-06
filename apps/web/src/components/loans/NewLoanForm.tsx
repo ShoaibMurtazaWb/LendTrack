@@ -17,6 +17,7 @@ import {
   type ItemCategoryId,
 } from "@/lib/item-categories";
 import { uploadItemPhoto } from "@/lib/upload-item-image";
+import { cn } from "@/lib/utils";
 import { Camera, Package, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,12 +32,16 @@ export type NewLoanFormProps = {
   presetContactId?: string | null;
   onSuccess?: () => void;
   showFooterTip?: boolean;
+  variant?: "page" | "dialog";
 };
+
+const DIALOG_STEPS = ["Item", "Contact", "Details"] as const;
 
 export function NewLoanForm({
   presetContactId = null,
   onSuccess,
   showFooterTip = true,
+  variant = "page",
 }: NewLoanFormProps) {
   const router = useRouter();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
@@ -80,6 +85,8 @@ export function NewLoanForm({
   const [loanedAt, setLoanedAt] = useState(new Date().toISOString().split("T")[0]);
   const [expectedReturnAt, setExpectedReturnAt] = useState("");
   const [notes, setNotes] = useState("");
+  const [step, setStep] = useState(0);
+  const isDialog = variant === "dialog";
 
   useEffect(() => {
     if (!presetContactId || !contacts?.length) return;
@@ -240,206 +247,310 @@ export function NewLoanForm({
   const formLoading = itemsLoading || contactsLoading;
   const displayCategory = resolveCategory();
 
-  return (
-    <div className="space-y-5">
-      <div className="rounded-xl bg-primary p-5 text-primary-foreground">
-        <h2 className="font-heading text-xl font-semibold">Lending made simple.</h2>
-        <p className="mt-1 text-sm text-primary-foreground/80">
-          Record neighborhood exchanges with trust.
-        </p>
+  const canAdvanceFromItem = resolveItemName().length > 0;
+  const canAdvanceFromContact = resolveContactName().length > 0;
+  const canSubmit =
+    canAdvanceFromItem && canAdvanceFromContact && loanedAt && expectedReturnAt;
+
+  const goNext = () => setStep((s) => Math.min(s + 1, DIALOG_STEPS.length - 1));
+  const goBack = () => setStep((s) => Math.max(s - 1, 0));
+
+  const itemFields = (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="item" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          What are you lending or borrowing?
+        </Label>
+        <SearchCombobox
+          id="item"
+          options={itemOptions}
+          value={itemQuery}
+          selectedId={itemId}
+          onValueChange={(value, id) => {
+            setItemQuery(value);
+            setItemId(id);
+            if (!id) {
+              setItemPhotoPreview(null);
+              setItemPhotoFile(null);
+            }
+          }}
+          placeholder="e.g. Lawn Mower, Drill, Book"
+          createLabel={(q) => `Add new item "${q}"`}
+        />
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="space-y-2">
+        <Label htmlFor="category" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Category
+        </Label>
+        <CategoryCombobox
+          id="category"
+          value={categoryQuery}
+          categoryId={categoryId}
+          onValueChange={(label, id) => {
+            categoryTouched.current = true;
+            setCategoryQuery(label);
+            setCategoryId(id);
+          }}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Item photo <span className="font-normal normal-case">(optional)</span>
+        </Label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="relative w-full max-w-[140px] overflow-hidden rounded-xl border border-border/60">
+            {itemPhotoPreview ? (
+              <>
+                <ItemThumbnail
+                  name={itemQuery}
+                  photoUrl={itemPhotoPreview}
+                  category={displayCategory}
+                  size="lg"
+                  className="!size-[140px] rounded-xl"
+                />
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  className="absolute right-1 top-1 flex size-7 cursor-pointer items-center justify-center rounded-full bg-background/90 shadow"
+                  aria-label="Remove photo"
+                >
+                  <X className="size-4" />
+                </button>
+              </>
+            ) : (
+              <div className="flex size-[140px] flex-col items-center justify-center gap-2 bg-muted/50 text-muted-foreground">
+                <ItemThumbnail
+                  name={itemQuery || "Item"}
+                  category={displayCategory}
+                  size="lg"
+                  className="!size-20"
+                />
+                <span className="text-xs">Category icon</span>
+              </div>
+            )}
+          </div>
+          <label className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-6 py-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/30">
+            <Camera className="size-8 text-muted-foreground" />
+            <span className="text-sm font-semibold">Upload photo</span>
+            <span className="text-xs text-muted-foreground">JPEG, PNG or WebP · max 5 MB</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="sr-only"
+              onChange={handlePhotoChange}
+            />
+          </label>
+        </div>
+      </div>
+    </>
+  );
+
+  const contactFields = (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="contact" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          With whom?
+        </Label>
+        <SearchCombobox
+          id="contact"
+          options={contactOptions}
+          value={contactQuery}
+          selectedId={contactId}
+          onValueChange={(value, id) => {
+            setContactQuery(value);
+            setContactId(id);
+            if (id) setNewContactEmail("");
+          }}
+          placeholder="Search contacts or type a new name…"
+          createLabel={(q) => `Add new contact "${q}"`}
+        />
+        {isNewContact && (
+          <Input
+            type="email"
+            placeholder="Their email (optional)"
+            className="h-12 cursor-text rounded-xl"
+            value={newContactEmail}
+            onChange={(e) => setNewContactEmail(e.target.value)}
+          />
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Transaction direction
+        </Label>
+        <DirectionToggle value={direction} onChange={setDirection} />
+      </div>
+    </>
+  );
+
+  const detailFields = (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="loanedAt" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Loaned on
+          </Label>
+          <Input
+            id="loanedAt"
+            type="date"
+            required
+            className="h-12 cursor-pointer rounded-xl"
+            value={loanedAt}
+            onChange={(e) => setLoanedAt(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="expectedReturn" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Expected return
+          </Label>
+          <Input
+            id="expectedReturn"
+            type="date"
+            required
+            className="h-12 cursor-pointer rounded-xl"
+            value={expectedReturnAt}
+            onChange={(e) => setExpectedReturnAt(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="notes" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Notes (optional)
+        </Label>
+        <Textarea
+          id="notes"
+          className="cursor-text rounded-xl"
+          placeholder="Add any specific conditions or descriptions…"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+        />
+      </div>
+    </>
+  );
+
+  return (
+    <div className={isDialog ? "flex h-full min-h-0 flex-col" : "space-y-5"}>
+      {!isDialog && (
+        <div className="rounded-xl bg-primary p-5 text-primary-foreground">
+          <h2 className="font-heading text-xl font-semibold">Lending made simple.</h2>
+          <p className="mt-1 text-sm text-primary-foreground/80">
+            Record neighborhood exchanges with trust.
+          </p>
+        </div>
+      )}
+
+      <div className={isDialog ? "flex min-h-0 flex-1 flex-col" : "rounded-xl border border-border bg-card p-5 shadow-sm"}>
         {formLoading ? (
           <PageSkeleton />
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="item" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                What are you lending or borrowing?
-              </Label>
-              <SearchCombobox
-                id="item"
-                options={itemOptions}
-                value={itemQuery}
-                selectedId={itemId}
-                onValueChange={(value, id) => {
-                  setItemQuery(value);
-                  setItemId(id);
-                  if (!id) {
-                    setItemPhotoPreview(null);
-                    setItemPhotoFile(null);
-                  }
-                }}
-                placeholder="e.g. Lawn Mower, Drill, Book"
-                createLabel={(q) => `Add new item "${q}"`}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="category" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Category
-              </Label>
-              <CategoryCombobox
-                id="category"
-                value={categoryQuery}
-                categoryId={categoryId}
-                onValueChange={(label, id) => {
-                  categoryTouched.current = true;
-                  setCategoryQuery(label);
-                  setCategoryId(id);
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Item photo <span className="font-normal normal-case">(optional)</span>
-              </Label>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                <div className="relative w-full max-w-[140px] overflow-hidden rounded-xl border border-border/60">
-                      {itemPhotoPreview ? (
-                    <>
-                      <ItemThumbnail
-                        name={itemQuery}
-                        photoUrl={itemPhotoPreview}
-                        category={displayCategory}
-                        size="lg"
-                        className="!size-[140px] rounded-xl"
-                      />
-                      <button
-                        type="button"
-                        onClick={clearPhoto}
-                        className="absolute right-1 top-1 flex size-7 cursor-pointer items-center justify-center rounded-full bg-background/90 shadow"
-                        aria-label="Remove photo"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex size-[140px] flex-col items-center justify-center gap-2 bg-muted/50 text-muted-foreground">
-                      <ItemThumbnail
-                        name={itemQuery || "Item"}
-                        category={displayCategory}
-                        size="lg"
-                        className="!size-20"
-                      />
-                      <span className="text-xs">Category icon</span>
+          <form
+            onSubmit={handleSubmit}
+            className={isDialog ? "flex min-h-0 flex-1 flex-col" : "space-y-5"}
+          >
+            {isDialog && (
+              <div className="mb-5 flex items-center gap-2">
+                {DIALOG_STEPS.map((label, index) => (
+                  <div key={label} className="flex flex-1 items-center gap-2">
+                    <div
+                      className={cn(
+                        "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                        index <= step
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {index + 1}
                     </div>
-                  )}
-                </div>
-                <label className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-6 py-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/30">
-                  <Camera className="size-8 text-muted-foreground" />
-                  <span className="text-sm font-semibold">Upload photo</span>
-                  <span className="text-xs text-muted-foreground">JPEG, PNG or WebP · max 5 MB</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="sr-only"
-                    onChange={handlePhotoChange}
-                  />
-                </label>
+                    <span
+                      className={cn(
+                        "hidden text-xs font-semibold sm:inline",
+                        index === step ? "text-foreground" : "text-muted-foreground"
+                      )}
+                    >
+                      {label}
+                    </span>
+                    {index < DIALOG_STEPS.length - 1 && (
+                      <div className="mx-1 hidden h-px flex-1 bg-border sm:block" />
+                    )}
+                  </div>
+                ))}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Skip the photo and we&apos;ll show the category icon on your loans.
-              </p>
-            </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="contact" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                With whom?
-              </Label>
-              <SearchCombobox
-                id="contact"
-                options={contactOptions}
-                value={contactQuery}
-                selectedId={contactId}
-                onValueChange={(value, id) => {
-                  setContactQuery(value);
-                  setContactId(id);
-                  if (id) setNewContactEmail("");
-                }}
-                placeholder="Search contacts or type a new name…"
-                createLabel={(q) => `Add new contact "${q}"`}
-              />
-              {isNewContact && (
-                <Input
-                  type="email"
-                  placeholder="Their email (optional)"
-                  className="h-12 cursor-text rounded-xl"
-                  value={newContactEmail}
-                  onChange={(e) => setNewContactEmail(e.target.value)}
-                />
+            <div className={isDialog ? "min-h-0 flex-1 space-y-5" : "space-y-5"}>
+              {isDialog ? (
+                <>
+                  {step === 0 && itemFields}
+                  {step === 1 && contactFields}
+                  {step === 2 && detailFields}
+                </>
+              ) : (
+                <>
+                  {itemFields}
+                  {contactFields}
+                  {detailFields}
+                </>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Transaction direction
-              </Label>
-              <DirectionToggle value={direction} onChange={setDirection} />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="loanedAt" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Loaned on
-                </Label>
-                <Input
-                  id="loanedAt"
-                  type="date"
-                  required
-                  className="h-12 cursor-pointer rounded-xl"
-                  value={loanedAt}
-                  onChange={(e) => setLoanedAt(e.target.value)}
-                />
+            {isDialog ? (
+              <div className="mt-6 flex shrink-0 gap-2 border-t border-border pt-4">
+                {step > 0 ? (
+                  <Button type="button" variant="outline" className="h-11 flex-1 rounded-xl" onClick={goBack}>
+                    Back
+                  </Button>
+                ) : (
+                  <div className="flex-1" />
+                )}
+                {step < DIALOG_STEPS.length - 1 ? (
+                  <Button
+                    type="button"
+                    className="h-11 flex-1 rounded-xl"
+                    disabled={step === 0 ? !canAdvanceFromItem : !canAdvanceFromContact}
+                    onClick={goNext}
+                  >
+                    Next
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    className="h-11 flex-1 rounded-xl font-bold"
+                    disabled={
+                      !canSubmit ||
+                      createLoan.isPending ||
+                      createItem.isPending ||
+                      createContact.isPending ||
+                      updateItem.isPending
+                    }
+                  >
+                    {createLoan.isPending ? "Creating…" : "Create loan"}
+                  </Button>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="expectedReturn" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Expected return
-                </Label>
-                <Input
-                  id="expectedReturn"
-                  type="date"
-                  required
-                  className="h-12 cursor-pointer rounded-xl"
-                  value={expectedReturnAt}
-                  onChange={(e) => setExpectedReturnAt(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Notes (optional)
-              </Label>
-              <Textarea
-                id="notes"
-                className="cursor-text rounded-xl"
-                placeholder="Add any specific conditions or descriptions…"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="h-14 w-full rounded-xl text-base font-bold shadow-md active:scale-95"
-              disabled={
-                createLoan.isPending ||
-                createItem.isPending ||
-                createContact.isPending ||
-                updateItem.isPending
-              }
-            >
-              {createLoan.isPending ? "Creating…" : "Create loan"}
-            </Button>
+            ) : (
+              <Button
+                type="submit"
+                className="h-14 w-full rounded-xl text-base font-bold shadow-md active:scale-95"
+                disabled={
+                  createLoan.isPending ||
+                  createItem.isPending ||
+                  createContact.isPending ||
+                  updateItem.isPending
+                }
+              >
+                {createLoan.isPending ? "Creating…" : "Create loan"}
+              </Button>
+            )}
           </form>
         )}
       </div>
 
-      {showFooterTip && (
+      {!isDialog && showFooterTip && (
         <div className="flex items-center gap-4 rounded-xl bg-secondary/20 p-4">
           <Package className="size-8 shrink-0 text-primary" />
           <p className="text-sm text-foreground">

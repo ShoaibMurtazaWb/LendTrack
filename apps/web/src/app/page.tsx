@@ -10,6 +10,10 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
+function scrollToFeatures() {
+  document.getElementById("features")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export default function HomePage() {
   const router = useRouter();
   const { session, isLoading } = useAuth();
@@ -35,27 +39,56 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-border/60 bg-background/85 px-4 glass-header md:px-8">
-        <Link href="/" aria-label="LendTrack home">
-          <LendTrackLogoFull height={32} />
-        </Link>
-        <nav className="hidden items-center gap-6 md:flex">
-          <a href="#features" className="text-sm font-semibold text-muted-foreground hover:text-foreground">
-            Features
-          </a>
-          <span className="text-sm font-semibold text-muted-foreground">Privacy first</span>
-        </nav>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link
-            href="/login"
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}
+      <header className="fixed top-0 z-50 w-full border-b border-border/60 bg-background/95 glass-header">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:gap-6 md:px-8">
+          <Link href="/" className="relative z-10 shrink-0" aria-label="LendTrack home">
+            <LendTrackLogoFull height={32} />
+          </Link>
+
+          <nav
+            className="relative z-10 hidden min-w-0 flex-1 items-center justify-center gap-6 sm:flex"
+            aria-label="Main"
           >
-            Log in
-          </Link>
-          <Link href="/register" className={cn(buttonVariants({ size: "sm" }), "rounded-xl")}>
-            Get started
-          </Link>
+            <button
+              type="button"
+              onClick={scrollToFeatures}
+              className="cursor-pointer text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Features
+            </button>
+            <Link
+              href="/privacy"
+              className="text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Privacy
+            </Link>
+            <Link
+              href="/terms"
+              className="text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Terms
+            </Link>
+          </nav>
+
+          <div className="relative z-10 ml-auto flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={scrollToFeatures}
+              className="cursor-pointer text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground sm:hidden"
+            >
+              Features
+            </button>
+            <ThemeToggle />
+            <Link
+              href="/login"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden sm:inline-flex")}
+            >
+              Log in
+            </Link>
+            <Link href="/register" className={cn(buttonVariants({ size: "sm" }), "rounded-xl")}>
+              Get started
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -85,7 +118,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="features" className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <section id="features" className="scroll-mt-28 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col justify-between rounded-2xl border border-border/60 bg-card p-6 shadow-sm md:col-span-2">
             <div>
               <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-primary/10">

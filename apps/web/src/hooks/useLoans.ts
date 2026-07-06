@@ -14,7 +14,6 @@ const EMPTY_DASHBOARD: DashboardSummary = {
   borrowed_count: 0,
   upcoming_due: [],
   top_contacts: [],
-  activity_week: [],
 };
 
 function patchDashboardForNewLoan(
@@ -131,18 +130,6 @@ export function useDashboardSummary() {
 
       const upcomingList = (upcoming ?? []) as LoanWithRelations[];
 
-      const activityWeek: { label: string; value: number }[] = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() + i);
-        const key = localDateString(d);
-        const label = d.toLocaleDateString("en-US", { weekday: "short" });
-        activityWeek.push({
-          label,
-          value: upcomingList.filter((l) => l.expected_return_at === key).length,
-        });
-      }
-
       const contactCounts = new Map<string, { id: string; name: string; loans: number }>();
       for (const loan of upcomingList) {
         if (!loan.contact_id || !loan.contact?.name) continue;
@@ -179,7 +166,6 @@ export function useDashboardSummary() {
         borrowed_count: borrowedCount ?? 0,
         upcoming_due: upcomingList,
         top_contacts,
-        activity_week: activityWeek,
       } satisfies DashboardSummary;
     },
   });

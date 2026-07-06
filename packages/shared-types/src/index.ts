@@ -76,7 +76,6 @@ export interface DashboardSummary {
   borrowed_count: number;
   upcoming_due: LoanWithRelations[];
   top_contacts: { id: string; name: string; score: number; loans: number }[];
-  activity_week: { label: string; value: number }[];
 }
 
 export interface ContactTrust {

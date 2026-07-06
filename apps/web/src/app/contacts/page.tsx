@@ -9,7 +9,7 @@ import { ContactGridCard } from "@/components/LoanGridCard";
 import { Pagination, paginateArray } from "@/components/Pagination";
 import { EmptyState, PageSkeleton } from "@/components/page-layout";
 import { QueryErrorState } from "@/components/QueryErrorState";
-import { useContacts, useCreateContact } from "@/hooks/useContacts";
+import { useContacts, useCreateContact, useContactsDirectoryStats } from "@/hooks/useContacts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,8 @@ function ContactsPageContent() {
   }, [contacts, search]);
 
   const paginated = filtered.length ? paginateArray(filtered, page, PAGE_SIZE) : null;
+  const visibleIds = paginated?.data.map((c) => c.id) ?? [];
+  const { data: contactStats } = useContactsDirectoryStats(visibleIds);
 
   const heroStats = useMemo(() => {
     if (!contacts) return { total: 0, verified: 0 };
@@ -187,7 +189,9 @@ function ContactsPageContent() {
                   No contacts match &ldquo;{search.trim()}&rdquo;
                 </p>
               ) : (
-                paginated?.data.map((contact) => (
+                paginated?.data.map((contact) => {
+                  const stats = contactStats?.get(contact.id);
+                  return (
                   <ContactGridCard
                     key={contact.id}
                     id={contact.id}
@@ -195,8 +199,13 @@ function ContactsPageContent() {
                     email={contact.email}
                     phone={contact.phone}
                     isVerified={!!contact.linked_user_id}
+                    completedLoans={stats?.completedLoans}
+                    activeLoans={stats?.activeLoans}
+                    trustScore={stats?.trustScore}
+                    hasScore={stats?.hasScore}
                   />
-                ))
+                  );
+                })
               )}
               </div>
 

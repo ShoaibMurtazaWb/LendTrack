@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail } from "lucide-react";
+import { PASSWORD_RESET_EMAIL_LIMIT, PASSWORD_RESET_RATE_WINDOW } from "@/lib/auth-errors";
 import { useForgotPassword } from "@/hooks/useAuth";
 import { RedirectIfAuthenticated, PublicPageLoader } from "@/components/PublicRoute";
 import { LendTrackLogoMark } from "@/components/LendTrackLogo";
@@ -54,7 +55,8 @@ export default function ForgotPasswordPage() {
 
           <h1 className="font-heading text-2xl font-semibold">Reset your password</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            We&apos;ll email you a link to choose a new password.
+            We&apos;ll email you a link to choose a new password. You can request up to{" "}
+            {PASSWORD_RESET_EMAIL_LIMIT} reset emails per {PASSWORD_RESET_RATE_WINDOW}.
           </p>
 
           {sent ? (

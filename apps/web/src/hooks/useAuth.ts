@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NotificationPrefs, Profile } from "@lendtrack/shared-types";
+import { formatAuthErrorMessage } from "@/lib/auth-errors";
 import { getAuthUser, supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -125,7 +126,7 @@ export function useForgotPassword() {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${origin}/auth/reset-password`,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(formatAuthErrorMessage(error.message));
     },
   });
 }

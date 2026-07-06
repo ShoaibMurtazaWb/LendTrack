@@ -135,6 +135,56 @@ export function useContactTrust(contactId: string) {
   });
 }
 
+export type ContactDirectoryStats = {
+  activeLoans: number;
+  completedLoans: number;
+  trustScore: number | null;
+  hasScore: boolean;
+};
+
+export function useContactsDirectoryStats(contactIds: string[]) {
+  const sortedKey = [...contactIds].sort().join(",");
+
+  return useQuery({
+    queryKey: ["contacts-directory-stats", sortedKey],
+    enabled: contactIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: loans, error: loansError } = await supabase
+        .from("loans")
+        .select("contact_id, status");
+
+      if (loansError) throw new Error(loansError.message);
+
+      const stats = new Map<string, ContactDirectoryStats>();
+      for (const id of contactIds) {
+        stats.set(id, { activeLoans: 0, completedLoans: 0, trustScore: null, hasScore: false });
+      }
+
+      for (const loan of loans ?? []) {
+        if (!loan.contact_id) continue;
+        const entry = stats.get(loan.contact_id);
+        if (!entry) continue;
+        if (loan.status === "active" || loan.status === "overdue") entry.activeLoans++;
+        if (loan.status === "returned" || loan.status === "lost") entry.completedLoans++;
+      }
+
+      await Promise.all(
+        contactIds.map(async (id) => {
+          const { data } = await supabase.rpc("get_contact_trust", { p_contact_id: id });
+          const trust = data as ContactTrust | null;
+          const entry = stats.get(id);
+          if (!entry) return;
+          entry.hasScore = trust?.has_score !== false && trust?.trust_score != null;
+          entry.trustScore = entry.hasScore ? trust!.trust_score : null;
+        })
+      );
+
+      return stats;
+    },
+  });
+}
+
 export function useDeleteContact() {
   const queryClient = useQueryClient();
 

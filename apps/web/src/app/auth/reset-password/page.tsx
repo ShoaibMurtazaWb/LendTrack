@@ -7,37 +7,73 @@ import { Lock } from "lucide-react";
 import { LendTrackLogoMark } from "@/components/LendTrackLogo";
 import { useResetPassword } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { establishRecoverySession } from "@/lib/auth-recovery";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
+
+type Phase = "loading" | "form" | "error";
+
+const inputClassName = cn(
+  "h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-base outline-none",
+  "transition-colors placeholder:text-muted-foreground",
+  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+);
 
 export default function ResetPasswordPage() {
   const router = useRouter();
   const resetPassword = useResetPassword();
-  const [ready, setReady] = useState(false);
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    let mounted = true;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (!mounted) return;
       if (event === "PASSWORD_RECOVERY") {
-        setReady(true);
+        setPhase("form");
+        setBootstrapError(null);
       }
     });
 
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true);
-    });
+    void (async () => {
+      const result = await establishRecoverySession();
+      if (!mounted) return;
+      if (result.ok) {
+        setPhase("form");
+        setBootstrapError(null);
+      } else {
+        setPhase("error");
+        setBootstrapError(result.message);
+      }
+    })();
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) return;
+
+    const { data: sessionCheck } = await supabase.auth.getSession();
+    if (!sessionCheck.session) {
+      setBootstrapError("Your reset session expired. Please request a new link.");
+      setPhase("error");
+      return;
+    }
+
     try {
       await resetPassword.mutateAsync(password);
-      router.replace("/dashboard");
+      await supabase.auth.signOut();
+      router.replace("/login?reset=success");
     } catch {
       // shown below
     }
@@ -56,27 +92,40 @@ export default function ResetPasswordPage() {
             Enter a new password for your LendTrack account.
           </p>
 
-          {!ready ? (
-            <p className="mt-6 text-sm text-muted-foreground">
-              Open the reset link from your email to continue. If the link expired,{" "}
-              <Link href="/forgot-password" className="text-primary hover:underline">
-                request a new one
-              </Link>
-              .
+          {phase === "loading" && (
+            <p className="mt-6 text-sm text-muted-foreground" role="status">
+              Verifying your reset link…
             </p>
-          ) : (
+          )}
+
+          {phase === "error" && (
+            <div className="mt-6 space-y-3">
+              <p className="text-sm text-destructive" role="alert">
+                {bootstrapError ?? "This reset link is invalid or has expired."}
+              </p>
+              <Link href="/forgot-password" className="text-sm font-semibold text-primary hover:underline">
+                Request a new reset link
+              </Link>
+            </div>
+          )}
+
+          {phase === "form" && (
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password">New password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                  <Input
+                  <Lock
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <input
                     id="password"
+                    name="password"
                     type="password"
                     required
                     minLength={6}
                     autoComplete="new-password"
-                    className="h-11 pl-10"
+                    className={cn(inputClassName, "pl-10")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -84,13 +133,14 @@ export default function ResetPasswordPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirm password</Label>
-                <Input
+                <input
                   id="confirm"
+                  name="confirm"
                   type="password"
                   required
                   minLength={6}
                   autoComplete="new-password"
-                  className="h-11"
+                  className={inputClassName}
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                 />
@@ -111,7 +161,7 @@ export default function ResetPasswordPage() {
               <Button
                 type="submit"
                 className="h-11 w-full rounded-xl"
-                disabled={resetPassword.isPending || password !== confirm}
+                disabled={resetPassword.isPending || !password || password !== confirm}
               >
                 {resetPassword.isPending ? "Updating…" : "Update password"}
               </Button>

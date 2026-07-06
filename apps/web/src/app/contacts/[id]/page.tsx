@@ -4,7 +4,8 @@ import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Mail, MessageSquare, Phone, Trash2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Mail, MessageSquare, Pencil, Phone, Trash2, ShieldCheck } from "lucide-react";
+import { EditContactDialog } from "@/components/contacts/EditContactDialog";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Pagination, paginateArray } from "@/components/Pagination";
@@ -42,6 +43,7 @@ function ContactDetailContent({ id }: { id: string }) {
   const deleteContact = useDeleteContact();
   const { openNewLoan } = useNewLoanDialog();
   const [showDelete, setShowDelete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [loanPage, setLoanPage] = useState(1);
 
   const paginatedLoans = loans ? paginateArray(loans, loanPage, LOAN_PAGE_SIZE) : null;
@@ -116,14 +118,20 @@ function ContactDetailContent({ id }: { id: string }) {
                     </p>
                   )}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setShowDelete(true)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+                    <Pencil className="size-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setShowDelete(true)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </CardHeader>
               {contact.notes && (
                 <CardContent>
@@ -185,6 +193,10 @@ function ContactDetailContent({ id }: { id: string }) {
             )}
           </div>
         </div>
+      )}
+
+      {contact && (
+        <EditContactDialog contact={contact} open={showEdit} onOpenChange={setShowEdit} />
       )}
 
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>

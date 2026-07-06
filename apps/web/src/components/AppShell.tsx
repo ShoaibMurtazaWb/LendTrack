@@ -12,6 +12,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { MobileGlobalSearch } from "@/components/MobileGlobalSearch";
+import { routeHasPageSearch } from "@/lib/app-routes";
 import { NewLoanDialogProvider } from "@/components/loans/NewLoanDialogProvider";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { LendTrackLogoFull, LendTrackLogoMark } from "@/components/LendTrackLogo";
@@ -74,6 +76,7 @@ export function AppShell({
   hideBottomNav = false,
 }: AppShellProps) {
   const pathname = usePathname();
+  const showGlobalSearch = !routeHasPageSearch(pathname);
   useSyncOverdueLoans();
 
   if (variant === "minimal") {
@@ -130,18 +133,23 @@ export function AppShell({
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col md:ml-[3.75rem]">
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/60 bg-background/85 px-4 glass-header md:h-16 md:px-8">
-          <div className="flex items-center md:hidden">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/85 px-4 glass-header md:h-16 md:gap-4 md:px-8">
+          <div className="flex min-w-0 items-center md:hidden">
             <Link href="/dashboard" aria-label="LendTrack home">
               <LendTrackLogoFull height={28} />
             </Link>
           </div>
 
-          <div className="hidden max-w-md flex-1 md:block">
-            <GlobalSearch />
-          </div>
+          {showGlobalSearch && (
+            <div className="hidden max-w-md flex-1 md:block">
+              <GlobalSearch />
+            </div>
+          )}
 
-          <UserAccountMenu />
+          <div className="ml-auto flex items-center gap-2">
+            {showGlobalSearch && <MobileGlobalSearch />}
+            <UserAccountMenu />
+          </div>
         </header>
 
         <main className="flex-1 px-4 py-5 pb-20 md:px-8 md:py-6 md:pb-6">{children}</main>

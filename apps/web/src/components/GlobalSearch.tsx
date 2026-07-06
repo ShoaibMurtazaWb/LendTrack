@@ -13,7 +13,15 @@ type ResultItem =
   | { type: "contact"; id: string; label: string; sub?: string; href: string }
   | { type: "loan"; id: string; label: string; sub?: string; href: string };
 
-export function GlobalSearch({ className }: { className?: string }) {
+export function GlobalSearch({
+  className,
+  onNavigate,
+  autoFocus = false,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+  autoFocus?: boolean;
+}) {
   const router = useRouter();
   const { data: contacts } = useContacts();
   const { data: loans } = useLoans();
@@ -75,6 +83,7 @@ export function GlobalSearch({ className }: { className?: string }) {
     setOpen(false);
     setQuery("");
     setActiveIndex(-1);
+    onNavigate?.();
     router.push(href);
   };
 
@@ -88,6 +97,7 @@ export function GlobalSearch({ className }: { className?: string }) {
         role="combobox"
         aria-expanded={showDropdown}
         aria-autocomplete="list"
+        autoFocus={autoFocus}
         placeholder="Search loans and contacts…"
         value={query}
         onChange={(e) => {

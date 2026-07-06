@@ -19,19 +19,20 @@ export function NewLoanDialog({ open, onOpenChange, presetContactId }: NewLoanDi
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[min(92vh,820px)] max-w-lg gap-0 overflow-y-auto p-0 sm:max-w-lg"
+        className="flex max-h-[min(90vh,680px)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
         showCloseButton
       >
-        <DialogHeader className="border-b border-border px-6 py-4">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
           <DialogTitle className="font-heading text-xl">New loan</DialogTitle>
           <DialogDescription>Record something you lent out or borrowed.</DialogDescription>
         </DialogHeader>
-        <div className="px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
           <NewLoanForm
             key={open ? presetContactId ?? "new" : "closed"}
             presetContactId={presetContactId}
             onSuccess={() => onOpenChange(false)}
             showFooterTip={false}
+            variant="dialog"
           />
         </div>
       </DialogContent>

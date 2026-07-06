@@ -88,7 +88,7 @@ export function LoanGridCard({
       {editHref && (
         <Link
           href={editHref}
-          className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card/90 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 hover:bg-accent"
+          className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card/90 opacity-100 shadow-sm backdrop-blur transition-opacity md:opacity-0 md:group-hover:opacity-100 hover:bg-accent"
           aria-label="Edit loan"
         >
           <Pencil className="size-3.5" />

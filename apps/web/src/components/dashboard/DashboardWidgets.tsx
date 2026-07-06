@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { ArrowUpRight, CheckCircle2, Handshake, Lock, RefreshCw, Sparkles, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -69,62 +68,100 @@ export function DashboardMetricTiles({
   );
 }
 
-export function DashboardActivityChart({
-  data,
+export function DashboardStatusChart({
+  active,
+  overdue,
+  returned,
+  locked,
 }: {
-  data: { label: string; value: number }[];
+  active: number;
+  overdue: number;
+  returned: number;
+  locked: number;
 }) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  const max = Math.max(...data.map((d) => d.value), 1);
+  const segments = [
+    { label: "Active", value: active, color: "bg-primary" },
+    { label: "Overdue", value: overdue, color: "bg-destructive" },
+    { label: "Returned", value: returned, color: "bg-brand-green" },
+    { label: "Locked", value: locked, color: "bg-muted-foreground/50" },
+  ];
+  const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
 
   return (
     <div className="bento-card rounded-3xl border border-border bg-card p-6 md:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h3 className="font-heading text-xl font-semibold">Due this week</h3>
-          <p className="text-sm text-muted-foreground">Hover a day to see count</p>
+          <h3 className="font-heading text-xl font-semibold">Loan status</h3>
+          <p className="text-sm text-muted-foreground">All-time breakdown</p>
         </div>
         <Link href="/loans" className="text-sm font-medium text-primary hover:underline">
           View all
         </Link>
       </div>
 
-      <div className="flex h-40 items-end justify-between gap-2 px-2">
-        {data.map((d, i) => {
-          const height = Math.max((d.value / max) * 100, d.value > 0 ? 12 : 6);
-          const isHovered = hovered === i;
-          return (
-            <button
-              key={d.label}
-              type="button"
-              className="group relative flex flex-1 flex-col items-center gap-2"
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
-              aria-label={`${d.label}: ${d.value} due`}
-            >
-              {isHovered && (
-                <span className="absolute -top-8 z-10 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-medium text-background shadow-sm">
-                  {d.value} due
-                </span>
-              )}
-              <div
-                className={cn(
-                  "w-full max-w-10 rounded-t-lg transition-all duration-200",
-                  isHovered ? "bg-primary" : d.value > 0 ? "bg-primary/40" : "bg-muted"
-                )}
-                style={{ height: `${height}%` }}
-              />
-              <span
-                className={cn(
-                  "text-[10px] font-semibold uppercase",
-                  isHovered ? "text-foreground" : "text-muted-foreground"
-                )}
-              >
-                {d.label}
-              </span>
-            </button>
-          );
-        })}
+      <div className="mb-6 flex h-4 overflow-hidden rounded-full bg-muted">
+        {segments.map((s) =>
+          s.value > 0 ? (
+            <div
+              key={s.label}
+              className={cn("h-full transition-all", s.color)}
+              style={{ width: `${(s.value / total) * 100}%` }}
+              title={`${s.label}: ${s.value}`}
+            />
+          ) : null
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {segments.map((s) => (
+          <div key={s.label} className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
+            <div className="flex items-center justify-center gap-1.5">
+              <span className={cn("size-2 rounded-full", s.color)} />
+              <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
+            </div>
+            <p className="mt-1 font-heading text-2xl font-bold">{s.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function DashboardDirectionChart({
+  lentOut,
+  borrowed,
+}: {
+  lentOut: number;
+  borrowed: number;
+}) {
+  const total = lentOut + borrowed || 1;
+  const lentPct = Math.round((lentOut / total) * 100);
+  const borrowedPct = 100 - lentPct;
+
+  return (
+    <div className="bento-card rounded-3xl border border-border bg-card p-6 md:p-8">
+      <div className="mb-6">
+        <h3 className="font-heading text-xl font-semibold">Lent vs borrowed</h3>
+        <p className="text-sm text-muted-foreground">Active and overdue loans only</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-brand-green/20 bg-brand-green-light/20 p-5">
+          <p className="text-sm font-semibold text-brand-green">Lent out</p>
+          <p className="font-heading mt-1 text-3xl font-bold">{lentOut}</p>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-brand-green" style={{ width: `${lentPct}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{lentPct}% of open loans</p>
+        </div>
+        <div className="rounded-2xl border border-secondary/30 bg-secondary/15 p-5">
+          <p className="text-sm font-semibold text-secondary-foreground">Borrowed</p>
+          <p className="font-heading mt-1 text-3xl font-bold">{borrowed}</p>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-secondary" style={{ width: `${borrowedPct}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{borrowedPct}% of open loans</p>
+        </div>
       </div>
     </div>
   );

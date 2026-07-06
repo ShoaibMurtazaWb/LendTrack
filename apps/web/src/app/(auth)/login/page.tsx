@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Mail, Lock } from "lucide-react";
 import { useLogin } from "@/hooks/useAuth";
 import { RedirectIfAuthenticated, PublicPageLoader } from "@/components/PublicRoute";
@@ -13,7 +13,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<PublicPageLoader />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get("reset") === "success";
   const { session, isLoading } = useAuth();
   const login = useLogin();
   const [email, setEmail] = useState("");
@@ -60,6 +70,11 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {resetSuccess && (
+              <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground" role="status">
+                Password updated. Sign in with your new password.
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email address</Label>
               <div className="relative">
