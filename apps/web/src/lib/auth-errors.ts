@@ -1,3 +1,5 @@
+import type { AuthResponse } from "@supabase/supabase-js";
+
 /** Supabase Auth email rate limit for password reset (per email, per hour). */
 export const PASSWORD_RESET_EMAIL_LIMIT = 2;
 export const PASSWORD_RESET_RATE_WINDOW = "hour";
@@ -9,13 +11,10 @@ export function normalizeAuthEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-type SignUpLikeResult = {
-  user?: { identities?: { length: number }[] } | null;
-  session?: unknown | null;
-};
-
 /** Supabase may return success with empty identities when email already exists. */
-export function isDuplicateSignUpResult(data: SignUpLikeResult | null | undefined): boolean {
+export function isDuplicateSignUpResult(
+  data: AuthResponse["data"] | null | undefined
+): boolean {
   const identities = data?.user?.identities;
   return Boolean(data?.user && Array.isArray(identities) && identities.length === 0);
 }
