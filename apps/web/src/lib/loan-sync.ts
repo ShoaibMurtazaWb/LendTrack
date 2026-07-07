@@ -23,5 +23,6 @@ export async function invalidateLoanCaches(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["loans"] }),
     queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+    queryClient.invalidateQueries({ queryKey: ["contacts-directory-stats"] }),
   ]);
 }

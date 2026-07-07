@@ -37,3 +37,13 @@ export type LoanMailContext = {
 
 /** @deprecated use LoanMailContext */
 export type LoanReminderContext = LoanMailContext;
+
+export type WeeklyDigestMailContext = {
+  ownerName: string;
+  ownerEmail: string;
+  activeCount: number;
+  overdueCount: number;
+  dueSoon: { itemName: string; contactName: string; dueDate: string }[];
+  returnedCount: number;
+  dashboardUrl: string;
+};

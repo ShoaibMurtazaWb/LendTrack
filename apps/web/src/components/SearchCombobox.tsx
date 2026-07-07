@@ -9,6 +9,7 @@ export type SearchComboboxOption = {
   id: string;
   label: string;
   searchText: string;
+  subtitle?: string;
 };
 
 type SearchComboboxProps = {
@@ -22,6 +23,7 @@ type SearchComboboxProps = {
   disabled?: boolean;
   id?: string;
   renderOptionStart?: (option: SearchComboboxOption) => React.ReactNode;
+  renderInputStart?: (selectedId: string | null) => React.ReactNode;
   onCreateSelect?: (query: string) => void;
 };
 
@@ -36,6 +38,7 @@ export function SearchCombobox({
   disabled,
   id,
   renderOptionStart,
+  renderInputStart,
   onCreateSelect,
 }: SearchComboboxProps) {
   const listId = useId();
@@ -129,25 +132,34 @@ export function SearchCombobox({
   };
 
   const showDropdown = open && (listItems.length > 0 || query.length === 0);
+  const inputStart = renderInputStart?.(selectedId);
 
   return (
     <div ref={containerRef} className="relative">
-      <Input
-        id={id}
-        type="text"
-        role="combobox"
-        aria-expanded={showDropdown && listItems.length > 0}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        autoComplete="off"
-        disabled={disabled}
-        placeholder={placeholder}
-        value={value}
-        className="h-12 w-full cursor-text rounded-xl border-border bg-background pl-3 text-base md:text-sm"
-        onChange={(e) => handleInputChange(e.target.value)}
-        onFocus={() => setOpen(true)}
-        onKeyDown={handleKeyDown}
-      />
+      <div
+        className={cn(
+          "flex h-12 w-full items-center gap-2 rounded-xl border border-border bg-background px-3",
+          disabled && "cursor-not-allowed opacity-50"
+        )}
+      >
+        {inputStart && <div className="flex shrink-0 items-center">{inputStart}</div>}
+        <Input
+          id={id}
+          type="text"
+          role="combobox"
+          aria-expanded={showDropdown && listItems.length > 0}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          autoComplete="off"
+          disabled={disabled}
+          placeholder={placeholder}
+          value={value}
+          className="h-full min-h-0 flex-1 border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 md:text-sm"
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
 
       {showDropdown && (
         <ul
@@ -195,7 +207,12 @@ export function SearchCombobox({
                   onClick={() => selectOption(item)}
                 >
                   {renderOptionStart?.(item)}
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{item.label}</span>
+                    {item.subtitle && (
+                      <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+                    )}
+                  </span>
                   {isSelected && <Check className="size-4 shrink-0 text-primary" />}
                 </button>
               </li>

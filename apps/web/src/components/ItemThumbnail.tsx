@@ -26,8 +26,8 @@ export function ItemThumbnail({
   size = "md",
   className,
 }: ItemThumbnailProps) {
-  const cat = getItemCategory(category);
-  const Icon = cat.icon;
+  const cat = category ? getItemCategory(category) : null;
+  const Icon = cat?.icon;
   const s = sizeMap[size];
   const isCard = size === "card";
 
@@ -65,6 +65,23 @@ export function ItemThumbnail({
           sizes={isCard ? "400px" : "80px"}
           unoptimized
         />
+      </div>
+    );
+  }
+
+  if (!cat || !Icon) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center gap-1 bg-muted text-muted-foreground",
+          isCard ? "h-36 w-full rounded-t-2xl" : cn(s.box, "shrink-0 rounded-xl"),
+          className
+        )}
+      >
+        <span className={cn("font-semibold", s.text)}>{name?.charAt(0).toUpperCase() ?? "?"}</span>
+        {isCard && name && (
+          <span className={cn("font-medium capitalize", s.text)}>{name}</span>
+        )}
       </div>
     );
   }

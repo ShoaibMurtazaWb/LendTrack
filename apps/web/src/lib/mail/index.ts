@@ -1,7 +1,8 @@
-export type { MailPayload, SendResult, LoanMailContext, LoanReminderContext, ReminderType } from "./types";
+export type { MailPayload, SendResult, LoanMailContext, LoanReminderContext, WeeklyDigestMailContext, ReminderType } from "./types";
 export { isMailConfigured } from "./transport";
 export {
   sendLoginNotification,
+  sendPasswordResetEmail,
   sendPremiumEndingSoon,
   sendPremiumEnded,
   sendPremiumPaymentFailed,
@@ -10,4 +11,5 @@ export {
   sendLoanOverdueContact,
   sendLoanCreatedOwner,
   sendLoanCreatedContact,
+  sendWeeklyDigest,
 } from "./notifications";

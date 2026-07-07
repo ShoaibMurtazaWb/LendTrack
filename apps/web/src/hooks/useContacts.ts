@@ -2,6 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Contact, ContactTrust, LoanWithRelations } from "@lendtrack/shared-types";
+import { contactHasTrustScore, contactTrustScore } from "@/lib/contact-trust";
+import { assertNotSelfContact } from "@/lib/contact-validation";
+import { isOpenLoan, isUnlockedActiveLoan } from "@/lib/loan-stats";
 import { getAuthUser, LOAN_SELECT, supabase } from "@/lib/supabase";
 
 export function useContacts() {
@@ -65,19 +68,28 @@ export function useCreateContact() {
   return useMutation({
     mutationFn: async (body: { name: string; email?: string; phone?: string; notes?: string }) => {
       const user = await getAuthUser();
+      assertNotSelfContact(user.email, body.email);
+
+      const name = body.name.trim();
+      if (!name) throw new Error("Contact name is required.");
+
       const { data, error } = await supabase
         .from("contacts")
         .insert({
           user_id: user.id,
-          name: body.name,
-          email: body.email || null,
-          phone: body.phone || null,
-          notes: body.notes || null,
+          name,
+          email: body.email?.trim() || null,
+          phone: body.phone?.trim() || null,
+          notes: body.notes?.trim() || null,
         })
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(
+        error.message.includes("CONTACT_SELF")
+          ? "You can't add yourself as a contact."
+          : error.message
+      );
       return data as Contact;
     },
     onSuccess: () => {
@@ -101,6 +113,10 @@ export function useUpdateContact() {
       notes?: string | null;
     }) => {
       const user = await getAuthUser();
+      if (updates.email !== undefined) {
+        assertNotSelfContact(user.email, updates.email);
+      }
+
       const { data, error } = await supabase
         .from("contacts")
         .update(updates)
@@ -109,7 +125,11 @@ export function useUpdateContact() {
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(
+        error.message.includes("CONTACT_SELF")
+          ? "You can't add yourself as a contact."
+          : error.message
+      );
       return data as Contact;
     },
     onSuccess: (_data, vars) => {
@@ -136,7 +156,10 @@ export function useContactTrust(contactId: string) {
 }
 
 export type ContactDirectoryStats = {
+  /** Status `active` only (matches dashboard). */
   activeLoans: number;
+  /** Active + overdue, not locked — outstanding with this contact. */
+  openLoans: number;
   completedLoans: number;
   trustScore: number | null;
   hasScore: boolean;
@@ -152,20 +175,27 @@ export function useContactsDirectoryStats(contactIds: string[]) {
     queryFn: async () => {
       const { data: loans, error: loansError } = await supabase
         .from("loans")
-        .select("contact_id, status");
+        .select("contact_id, status, is_locked");
 
       if (loansError) throw new Error(loansError.message);
 
       const stats = new Map<string, ContactDirectoryStats>();
       for (const id of contactIds) {
-        stats.set(id, { activeLoans: 0, completedLoans: 0, trustScore: null, hasScore: false });
+        stats.set(id, {
+          activeLoans: 0,
+          openLoans: 0,
+          completedLoans: 0,
+          trustScore: null,
+          hasScore: false,
+        });
       }
 
       for (const loan of loans ?? []) {
         if (!loan.contact_id) continue;
         const entry = stats.get(loan.contact_id);
         if (!entry) continue;
-        if (loan.status === "active" || loan.status === "overdue") entry.activeLoans++;
+        if (isUnlockedActiveLoan(loan)) entry.activeLoans++;
+        if (isOpenLoan(loan)) entry.openLoans++;
         if (loan.status === "returned" || loan.status === "lost") entry.completedLoans++;
       }
 
@@ -175,8 +205,8 @@ export function useContactsDirectoryStats(contactIds: string[]) {
           const trust = data as ContactTrust | null;
           const entry = stats.get(id);
           if (!entry) return;
-          entry.hasScore = trust?.has_score !== false && trust?.trust_score != null;
-          entry.trustScore = entry.hasScore ? trust!.trust_score : null;
+          entry.hasScore = contactHasTrustScore(trust);
+          entry.trustScore = contactTrustScore(trust);
         })
       );
 

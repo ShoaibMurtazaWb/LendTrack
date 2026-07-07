@@ -72,7 +72,7 @@ export function useLogin() {
             Authorization: `Bearer ${data.session.access_token}`,
           },
           body: JSON.stringify({ userAgent: navigator.userAgent }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
     },
   });
@@ -122,11 +122,16 @@ export function useLogout() {
 export function useForgotPassword() {
   return useMutation({
     mutationFn: async (email: string) => {
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${origin}/auth/reset-password`,
+      const response = await fetch("/api/auth/password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
-      if (error) throw new Error(formatAuthErrorMessage(error.message));
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(formatAuthErrorMessage(payload.error || "Failed to send reset email"));
+      }
     },
   });
 }

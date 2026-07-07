@@ -58,14 +58,18 @@ export function useUpdateItem() {
   return useMutation({
     mutationFn: async (body: {
       id: string;
+      name?: string;
       category?: string | null;
+      description?: string | null;
       photo_url?: string | null;
     }) => {
       const { id, ...updates } = body;
       const { data, error } = await supabase
         .from("items")
         .update({
+          ...(updates.name !== undefined ? { name: updates.name } : {}),
           ...(updates.category !== undefined ? { category: updates.category } : {}),
+          ...(updates.description !== undefined ? { description: updates.description } : {}),
           ...(updates.photo_url !== undefined ? { photo_url: updates.photo_url } : {}),
         })
         .eq("id", id)

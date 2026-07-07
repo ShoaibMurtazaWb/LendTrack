@@ -11,6 +11,8 @@ export type SubscriptionStatus = "active" | "canceled" | "past_due";
 export interface NotificationPrefs {
   email_reminders: boolean;
   weekly_digest: boolean;
+  /** ISO date (YYYY-MM-DD) of the Monday for the last weekly digest sent. */
+  last_weekly_digest_at?: string;
 }
 
 export interface Profile {

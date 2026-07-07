@@ -42,7 +42,7 @@ export const ITEM_CATEGORIES: ItemCategory[] = [
   { id: "clothing", label: "Clothing", icon: Shirt, bg: "bg-pink-100 dark:bg-pink-950", fg: "text-pink-700 dark:text-pink-300" },
   { id: "toys", label: "Toys & Games", icon: Gamepad2, bg: "bg-cyan-100 dark:bg-cyan-950", fg: "text-cyan-700 dark:text-cyan-300" },
   { id: "vehicle", label: "Vehicle", icon: Car, bg: "bg-slate-200 dark:bg-slate-800", fg: "text-slate-700 dark:text-slate-300" },
-  { id: "other", label: "Other", icon: Package, bg: "bg-primary/10", fg: "text-primary" },
+  { id: "other", label: "Other", icon: Package, bg: "bg-slate-100 dark:bg-slate-800", fg: "text-slate-600 dark:text-slate-300" },
 ];
 
 export function getItemCategory(id?: string | null): ItemCategory {

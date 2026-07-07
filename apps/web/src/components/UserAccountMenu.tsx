@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { LogOut, Moon, Settings, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
 import { useLogout, useProfile } from "@/hooks/useAuth";
 import { useAuth } from "@/providers/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -47,14 +47,15 @@ export function UserAccountMenu({ className }: { className?: string }) {
 
   const initial = (profile?.full_name || user?.email || "U").charAt(0).toUpperCase();
   const displayName = profile?.full_name?.trim() || "Your account";
-  const isDark = mounted && (theme === "system" ? resolvedTheme : theme) === "dark";
+  const isDark = mounted && resolvedTheme === "dark";
+  const isSystem = mounted && theme === "system";
 
   return (
     <div ref={ref} className={cn("relative", className)}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex size-9 cursor-pointer items-center justify-center rounded-full border-2 border-border bg-muted text-sm font-semibold text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex size-10 cursor-pointer items-center justify-center rounded-full border-2 border-primary/20 bg-surface-container text-sm font-semibold text-primary transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"
@@ -89,14 +90,14 @@ export function UserAccountMenu({ className }: { className?: string }) {
             <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Theme
             </p>
-            <div className="grid grid-cols-2 gap-1">
+            <div className="grid grid-cols-3 gap-1">
               <button
                 type="button"
                 role="menuitem"
                 onClick={() => setTheme("light")}
                 className={cn(
-                  "flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium",
-                  !isDark ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                  "flex cursor-pointer items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[11px] font-medium",
+                  theme === "light" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                 )}
               >
                 <Sun className="size-3.5" />
@@ -107,14 +108,31 @@ export function UserAccountMenu({ className }: { className?: string }) {
                 role="menuitem"
                 onClick={() => setTheme("dark")}
                 className={cn(
-                  "flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium",
-                  isDark ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                  "flex cursor-pointer items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[11px] font-medium",
+                  theme === "dark" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                 )}
               >
                 <Moon className="size-3.5" />
                 Dark
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setTheme("system")}
+                className={cn(
+                  "flex cursor-pointer items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[11px] font-medium",
+                  isSystem ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                )}
+              >
+                <Monitor className="size-3.5" />
+                Auto
+              </button>
             </div>
+            {isSystem && (
+              <p className="px-2 pt-1 text-[10px] text-muted-foreground">
+                Currently {isDark ? "dark" : "light"} from system
+              </p>
+            )}
           </div>
 
           <div className="border-t border-border p-1">

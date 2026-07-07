@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Contact } from "@lendtrack/shared-types";
 import { useUpdateContact } from "@/hooks/useContacts";
+import { assertNotSelfContact } from "@/lib/contact-validation";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +26,7 @@ type EditContactDialogProps = {
 };
 
 export function EditContactDialog({ contact, open, onOpenChange }: EditContactDialogProps) {
+  const { user } = useAuth();
   const updateContact = useUpdateContact();
   const [name, setName] = useState(contact.name);
   const [email, setEmail] = useState(contact.email ?? "");
@@ -40,14 +43,39 @@ export function EditContactDialog({ contact, open, onOpenChange }: EditContactDi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim() || null;
+    const trimmedPhone = phone.trim() || null;
+    const trimmedNotes = notes.trim() || null;
+
+    const updates: {
+      id: string;
+      name?: string;
+      email?: string | null;
+      phone?: string | null;
+      notes?: string | null;
+    } = { id: contact.id };
+
+    if (trimmedName !== contact.name) updates.name = trimmedName;
+    if (trimmedName.length === 0) {
+      toast.error("Contact name is required.");
+      return;
+    }
+    if (trimmedEmail !== (contact.email ?? null)) updates.email = trimmedEmail;
+    if (trimmedPhone !== (contact.phone ?? null)) updates.phone = trimmedPhone;
+    if (trimmedNotes !== (contact.notes ?? null)) updates.notes = trimmedNotes;
+
+    if (Object.keys(updates).length === 1) {
+      onOpenChange(false);
+      return;
+    }
+
     try {
-      await updateContact.mutateAsync({
-        id: contact.id,
-        name: name.trim(),
-        email: email.trim() || null,
-        phone: phone.trim() || null,
-        notes: notes.trim() || null,
-      });
+      if (updates.email !== undefined) {
+        assertNotSelfContact(user?.email, updates.email);
+      }
+      await updateContact.mutateAsync(updates);
       toast.success("Contact updated");
       onOpenChange(false);
     } catch (err) {

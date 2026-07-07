@@ -5,69 +5,102 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConversationPreview, Message } from "@lendtrack/shared-types";
 import { getAuthUser, supabase } from "@/lib/supabase";
 
+function isMissingTableError(error: { message?: string; code?: string } | null) {
+  if (!error) return false;
+  const msg = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    error.code === "PGRST200" ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache") ||
+    msg.includes("could not find the table")
+  );
+}
+
 export function useConversations() {
   return useQuery({
     queryKey: ["conversations"],
     queryFn: async () => {
       const user = await getAuthUser();
 
-      const { data: conversations, error } = await supabase
+      const { data: conversations, error: convError } = await supabase
         .from("conversations")
-        .select("*")
+        .select("id, user_one_id, user_two_id, updated_at")
         .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
         .order("updated_at", { ascending: false });
 
-      if (error) throw new Error(error.message);
+      if (convError) {
+        if (isMissingTableError(convError)) {
+          return [] as ConversationPreview[];
+        }
+        throw new Error(convError.message);
+      }
+
       if (!conversations?.length) return [] as ConversationPreview[];
 
-      const { data: contacts } = await supabase
+      const convIds = conversations.map((c) => c.id);
+
+      const { data: contacts, error: contactsError } = await supabase
         .from("contacts")
-        .select("id, name, linked_user_id")
+        .select("id, name, email, linked_user_id")
         .eq("user_id", user.id)
         .is("deleted_at", null)
         .not("linked_user_id", "is", null);
 
+      if (contactsError && !isMissingTableError(contactsError)) {
+        throw new Error(contactsError.message);
+      }
+
+      const { data: messages, error: messagesError } = await supabase
+        .from("messages")
+        .select("conversation_id, body, created_at, sender_id, read_at")
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: false });
+
+      if (messagesError && !isMissingTableError(messagesError)) {
+        throw new Error(messagesError.message);
+      }
+
       const contactByUser = new Map(
-        (contacts ?? []).map((c) => [c.linked_user_id as string, { id: c.id, name: c.name }])
+        (contacts ?? []).map((c) => [
+          c.linked_user_id as string,
+          { id: c.id, name: c.name, email: c.email as string | null },
+        ])
       );
 
-      const previews: ConversationPreview[] = [];
+      const lastByConv = new Map<string, NonNullable<typeof messages>[number]>();
+      const unreadByConv = new Map<string, number>();
 
-      for (const conv of conversations) {
+      for (const msg of messages ?? []) {
+        if (!lastByConv.has(msg.conversation_id)) {
+          lastByConv.set(msg.conversation_id, msg);
+        }
+        if (msg.sender_id !== user.id && !msg.read_at) {
+          unreadByConv.set(msg.conversation_id, (unreadByConv.get(msg.conversation_id) ?? 0) + 1);
+        }
+      }
+
+      return conversations.map((conv) => {
         const otherUserId =
           conv.user_one_id === user.id ? conv.user_two_id : conv.user_one_id;
         const contact = contactByUser.get(otherUserId);
+        const last = lastByConv.get(conv.id);
 
-        const { data: lastRows } = await supabase
-          .from("messages")
-          .select("body, created_at, sender_id, read_at")
-          .eq("conversation_id", conv.id)
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        const last = lastRows?.[0];
-
-        const { count } = await supabase
-          .from("messages")
-          .select("id", { count: "exact", head: true })
-          .eq("conversation_id", conv.id)
-          .neq("sender_id", user.id)
-          .is("read_at", null);
-
-        previews.push({
+        return {
           conversation_id: conv.id,
           other_user_id: otherUserId,
           contact_id: contact?.id ?? null,
           contact_name: contact?.name ?? "Neighbor",
           last_message: last?.body ?? null,
           last_message_at: last?.created_at ?? conv.updated_at,
-          unread_count: count ?? 0,
-        });
-      }
-
-      return previews;
+          unread_count: unreadByConv.get(conv.id) ?? 0,
+        } satisfies ConversationPreview;
+      });
     },
     staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 
@@ -81,7 +114,10 @@ export function useContactConversation(contactId: string, linkedUserId?: string 
       const { data, error } = await supabase.rpc("get_or_create_conversation", {
         p_other_user_id: linkedUserId,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (isMissingTableError(error)) return null;
+        throw new Error(error.message);
+      }
       return data as string;
     },
   });
@@ -98,7 +134,10 @@ export function useContactConversation(contactId: string, linkedUserId?: string 
         .eq("conversation_id", conversationId!)
         .order("created_at", { ascending: true });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (isMissingTableError(error)) return [] as Message[];
+        throw new Error(error.message);
+      }
       return (data ?? []) as Message[];
     },
   });
@@ -122,6 +161,27 @@ export function useContactConversation(contactId: string, linkedUserId?: string 
             if (!old) return [row];
             if (old.some((m) => m.id === row.id)) return old;
             return [...old, row];
+          });
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const row = payload.new as Message;
+          queryClient.setQueryData<Message[]>(["messages", conversationId], (old) => {
+            if (!old) return [row];
+            const idx = old.findIndex((m) => m.id === row.id);
+            if (idx === -1) return [...old, row];
+            const next = [...old];
+            next[idx] = row;
+            return next;
           });
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
         }
@@ -156,6 +216,21 @@ export function useContactConversation(contactId: string, linkedUserId?: string 
   }, [conversationId, messagesQuery.data, queryClient]);
 
   const sendMessage = useMutation({
+    onMutate: async (body: string) => {
+      if (!conversationId) return { tempId: null as string | null };
+      const user = await getAuthUser();
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: Message = {
+        id: tempId,
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body: body.trim(),
+        created_at: new Date().toISOString(),
+        read_at: null,
+      };
+      queryClient.setQueryData<Message[]>(["messages", conversationId], (old) => [...(old ?? []), optimistic]);
+      return { tempId };
+    },
     mutationFn: async (body: string) => {
       const user = await getAuthUser();
       const trimmed = body.trim();
@@ -179,9 +254,16 @@ export function useContactConversation(contactId: string, linkedUserId?: string 
       queryClient.setQueryData<Message[]>(["messages", conversationId], (old) => {
         if (!old) return [msg];
         if (old.some((m) => m.id === msg.id)) return old;
-        return [...old, msg];
+        const withoutTemp = old.filter((m) => !m.id.startsWith("temp-"));
+        return [...withoutTemp, msg];
       });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+    onError: (_error, _variables, context) => {
+      if (!conversationId || !context?.tempId) return;
+      queryClient.setQueryData<Message[]>(["messages", conversationId], (old) =>
+        (old ?? []).filter((m) => m.id !== context.tempId)
+      );
     },
   });
 

@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, MessageSquare, Pencil } from "lucide-react";
+import Image from "next/image";
+import { ArrowUpRight, BadgeCheck, Eye, Handshake, MessageSquare, Pencil, Sparkles, Trash2 } from "lucide-react";
 import type { Item } from "@lendtrack/shared-types";
 import { ItemThumbnail } from "@/components/ItemThumbnail";
 import { useNewLoanDialog } from "@/components/loans/NewLoanDialogProvider";
 import { LockedBadge, StatusBadge } from "@/components/page-layout";
 import { Button } from "@/components/ui/button";
+import { getCategoryLabel, getItemCategory } from "@/lib/item-categories";
 import { cn } from "@/lib/utils";
+import { formatAppDate } from "@/lib/format-date";
+import { localDateString } from "@/lib/loan-sync";
 
 type LoanGridCardProps = {
   href: string;
@@ -18,20 +22,23 @@ type LoanGridCardProps = {
   status: string;
   isLocked?: boolean;
   editHref?: string;
+  onDelete?: () => void;
 };
 
-function directionBadge(direction: string) {
-  const isLent = direction === "lent_out";
-  return (
-    <span
-      className={cn(
-        "rounded-full px-3 py-1 text-xs font-semibold",
-        isLent ? "bg-brand-green-light text-brand-green" : "bg-secondary/40 text-secondary-foreground"
-      )}
-    >
-      {isLent ? "Lent out" : "Borrowed"}
-    </span>
-  );
+function daysRemaining(dueDate: string): number | null {
+  const key = dueDate?.includes("T") ? dueDate.slice(0, 10) : dueDate;
+  if (!key) return null;
+  const due = new Date(`${key}T12:00:00`);
+  const today = new Date(`${localDateString()}T12:00:00`);
+  return Math.round((due.getTime() - today.getTime()) / 86400000);
+}
+
+function daysLabel(days: number | null, isOverdue: boolean) {
+  if (days === null) return null;
+  if (isOverdue || days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  return `${days}d left`;
 }
 
 export function LoanGridCard({
@@ -43,57 +50,143 @@ export function LoanGridCard({
   status,
   isLocked = false,
   editHref,
+  onDelete,
 }: LoanGridCardProps) {
   const isOverdue = status === "overdue";
   const isLent = direction === "lent_out";
   const contactLine = isLent ? `Lent to ${contactName}` : `Borrowed from ${contactName}`;
+  const days = daysRemaining(dueDate);
+  const daysText = daysLabel(days, isOverdue);
+  const category = getItemCategory(item?.category);
+  const CategoryIcon = category.icon;
 
   return (
     <article
       className={cn(
-        "bento-card group relative overflow-hidden rounded-xl border border-border bg-card",
+        "pro-card-hover group relative flex flex-col overflow-hidden",
         isLocked && "opacity-65"
       )}
     >
-      <Link href={href} className="block">
-        <div className="p-5">
-          <div className="mb-4 flex items-start justify-between gap-2">
+      <Link href={href} className="flex flex-1 flex-col">
+        <div className="relative h-36 overflow-hidden bg-muted">
+          {item?.photo_url ? (
+            <div className="flex h-full w-full items-center justify-center bg-gray-50 p-3">
+              <div className="relative h-full w-full">
+                <Image
+                  src={item.photo_url}
+                  alt={item?.name ?? "Item photo"}
+                  fill
+                  className="max-h-full max-w-full object-contain"
+                  sizes="(max-width: 1024px) 100vw, 33vw"
+                  unoptimized
+                />
+              </div>
+            </div>
+          ) : (
             <ItemThumbnail
               name={item?.name}
               photoUrl={item?.photo_url}
               category={item?.category}
-              size="lg"
+              size="card"
+              className="h-full rounded-none"
             />
+          )}
+          <div className="absolute right-3 top-3">
             <StatusBadge status={status} />
           </div>
+        </div>
 
-          <h3 className="font-heading mb-1 line-clamp-2 text-lg font-semibold group-hover:text-primary">
-            {item?.name ?? "Item"}
-          </h3>
-          <p className="mb-4 text-sm text-muted-foreground">{contactLine}</p>
+        <div className="flex flex-1 flex-col p-4">
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <h3 className="line-clamp-2 text-base font-semibold leading-snug group-hover:text-primary">
+                {item?.name ?? "Item"}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">{contactLine}</p>
+            </div>
+          </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-            {directionBadge(direction)}
-            {isLocked && <LockedBadge />}
-            <span className="ml-auto text-right">
-              <span className="block text-xs text-muted-foreground">Due date</span>
-              <span className={cn("text-sm font-medium", isOverdue && "text-destructive")}>
-                {dueDate}
-              </span>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                category.bg,
+                category.fg
+              )}
+            >
+              <CategoryIcon className="size-3" strokeWidth={2} />
+              {getCategoryLabel(item?.category)}
             </span>
+            <span
+              className={cn(
+                "rounded-full px-2.5 py-1 text-xs font-medium",
+                isLent
+                  ? "bg-brand-green-light/60 text-brand-green"
+                  : "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+              )}
+            >
+              {isLent ? "Lent out" : "Borrowed"}
+            </span>
+            {isLocked && <LockedBadge />}
+          </div>
+
+          <div className="mt-auto flex items-end justify-between border-t border-border pt-3">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Due date
+              </p>
+              <p className={cn("text-sm font-semibold", isOverdue && "text-destructive")}>
+                {formatAppDate(dueDate)}
+              </p>
+            </div>
+            {daysText && (
+              <span
+                className={cn(
+                  "rounded-lg px-2 py-1 text-xs font-semibold",
+                  isOverdue
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {daysText}
+              </span>
+            )}
           </div>
         </div>
       </Link>
 
-      {editHref && (
+      <div className="absolute right-3 top-[9.5rem] flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
         <Link
-          href={editHref}
-          className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-lg border border-border bg-card/90 opacity-100 shadow-sm backdrop-blur transition-opacity md:opacity-0 md:group-hover:opacity-100 hover:bg-accent"
-          aria-label="Edit loan"
+          href={href}
+          className="flex size-8 items-center justify-center rounded-lg border border-border bg-card/95 shadow-sm backdrop-blur hover:bg-muted"
+          aria-label="View loan"
         >
-          <Pencil className="size-3.5" />
+          <Eye className="size-3.5" />
         </Link>
-      )}
+        {editHref && (
+          <Link
+            href={editHref}
+            className="flex size-8 items-center justify-center rounded-lg border border-border bg-card/95 shadow-sm backdrop-blur hover:bg-muted"
+            aria-label="Edit loan"
+          >
+            <Pencil className="size-3.5" />
+          </Link>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="flex size-8 items-center justify-center rounded-lg border border-border bg-card/95 shadow-sm backdrop-blur hover:bg-destructive/10"
+            aria-label="Delete loan"
+          >
+            <Trash2 className="size-3.5 text-destructive" />
+          </button>
+        )}
+      </div>
     </article>
   );
 }
@@ -120,67 +213,68 @@ export function ContactGridCard({
   hasScore?: boolean;
 }) {
   const { openNewLoan } = useNewLoanDialog();
-  const showScore = hasScore !== false && trustScore != null;
+  const showScore = hasScore === true && trustScore != null;
 
   return (
-    <div className="bento-card flex min-h-[320px] flex-col rounded-3xl border border-border bg-card p-6">
-      <div className="mb-6 flex items-start justify-between">
-        <div className="relative">
-          <div className="flex size-20 items-center justify-center rounded-full border-2 border-primary/10 bg-muted text-2xl font-bold text-primary">
-            {name.charAt(0).toUpperCase()}
+    <div className="pro-card-hover flex min-h-[300px] flex-col p-5">
+      <div className="mb-4 flex gap-4">
+        <div className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-muted text-xl font-semibold text-primary">
+          {name.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <Link href={`/contacts/${id}`} className="truncate text-base font-semibold hover:text-primary">
+              {name}
+            </Link>
+            {isVerified ? (
+              <span className="flex shrink-0 items-center gap-1 rounded-md bg-brand-green-light px-2 py-0.5 text-[10px] font-semibold text-brand-green">
+                <BadgeCheck className="size-3" />
+                Verified
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                <Sparkles className="size-3" />
+                New
+              </span>
+            )}
           </div>
-          {isVerified && (
-            <span className="absolute -bottom-1 -right-1 rounded-full border-2 border-card bg-brand-green-light p-1 text-brand-green">
-              ✓
-            </span>
-          )}
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {email ?? phone ?? "Lending contact"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg bg-muted p-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Trust</p>
+          <p className="text-xl font-semibold text-primary">{showScore ? trustScore : "—"}</p>
         </div>
         <div className="text-right">
-          {showScore ? (
-            <>
-              <span className="font-heading text-2xl font-bold">{trustScore}</span>
-              <p className="text-xs font-semibold uppercase text-brand-green">Trust score</p>
-            </>
-          ) : (
-            <p className="text-xs font-medium italic text-muted-foreground">No history yet</p>
-          )}
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Open</p>
+          <p className="text-xl font-semibold">{activeLoans ?? 0}</p>
         </div>
       </div>
 
-      <div className="mb-6 flex-grow">
-        <Link href={`/contacts/${id}`} className="font-heading text-xl font-semibold hover:text-primary">
-          {name}
+      {completedLoans != null && completedLoans > 0 && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          {completedLoans} completed loan{completedLoans === 1 ? "" : "s"}
+        </p>
+      )}
+
+      <div className="mt-auto space-y-2">
+        <Link
+          href={`/messages/${id}`}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          <MessageSquare className="size-4" />
+          Message
         </Link>
-        {email && <p className="mt-1 truncate text-sm text-muted-foreground">{email}</p>}
-        {phone && !email && <p className="mt-1 text-sm text-muted-foreground">{phone}</p>}
+        <Button type="button" className="w-full gap-2 rounded-lg" onClick={() => openNewLoan(id)}>
+          <Handshake className="size-4" />
+          New loan
+          <ArrowUpRight className="size-4" />
+        </Button>
       </div>
-
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-xl bg-muted/50 p-4">
-        <div>
-          <p className="text-xs text-muted-foreground">Completed</p>
-          <p className="font-bold">{completedLoans ?? 0} loans</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">In progress</p>
-          <p className="font-bold">{activeLoans ?? 0}</p>
-        </div>
-      </div>
-
-      <Link
-        href={`/messages/${id}`}
-        className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-border py-3.5 text-sm font-medium transition-colors hover:bg-muted/50"
-      >
-        <MessageSquare className="size-4" />
-        Message
-      </Link>
-      <Button
-        type="button"
-        className="flex w-full gap-2 rounded-xl"
-        onClick={() => openNewLoan(id)}
-      >
-        New loan with {name.split(" ")[0]}
-        <ArrowUpRight className="size-4" />
-      </Button>
     </div>
   );
 }

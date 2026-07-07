@@ -15,6 +15,7 @@ type CategoryComboboxProps = {
   onValueChange: (label: string, categoryId: ItemCategoryId | null) => void;
   id?: string;
   disabled?: boolean;
+  placeholder?: string;
 };
 
 export function CategoryCombobox({
@@ -23,6 +24,7 @@ export function CategoryCombobox({
   onValueChange,
   id,
   disabled,
+  placeholder = "Select a category…",
 }: CategoryComboboxProps) {
   const options = useMemo(
     () =>
@@ -34,55 +36,44 @@ export function CategoryCombobox({
     []
   );
 
-  const renderIcon = (option: { id: string }) => {
-    const cat = getItemCategory(option.id);
+  const renderIcon = (optionId: string) => {
+    const cat = getItemCategory(optionId);
     const Icon = cat.icon;
     return (
-      <span
-        className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${cat.bg}`}
-      >
+      <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${cat.bg}`}>
         <Icon className={`size-4 ${cat.fg}`} strokeWidth={1.75} />
       </span>
     );
   };
 
   return (
-    <div className="space-y-2">
-      <SearchCombobox
-        id={id}
-        disabled={disabled}
-        options={options}
-        value={value}
-        selectedId={categoryId}
-        onValueChange={(label, selectedId) => {
-          if (selectedId) {
-            onValueChange(label, selectedId as ItemCategoryId);
-          } else {
-            onValueChange(label, null);
-          }
-        }}
-        onCreateSelect={(query) => {
-          const resolved = resolveCategoryFromInput(query);
-          const cat = getItemCategory(resolved);
-          onValueChange(cat.label, resolved);
-        }}
-        placeholder="Search categories or type a new one…"
-        createLabel={(query) => {
-          const resolved = resolveCategoryFromInput(query);
-          const cat = getItemCategory(resolved);
-          return `Use "${cat.label}" for "${query}"`;
-        }}
-        hint="Each category gets an icon automatically on your loans."
-        renderOptionStart={renderIcon}
-      />
-      {categoryId && (
-        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          {renderIcon({ id: categoryId })}
-          <span>
-            Icon preview: <span className="font-medium text-foreground">{getItemCategory(categoryId).label}</span>
-          </span>
-        </div>
-      )}
-    </div>
+    <SearchCombobox
+      id={id}
+      disabled={disabled}
+      options={options}
+      value={value}
+      selectedId={categoryId}
+      onValueChange={(label, selectedId) => {
+        if (selectedId) {
+          onValueChange(label, selectedId as ItemCategoryId);
+        } else {
+          onValueChange(label, null);
+        }
+      }}
+      onCreateSelect={(query) => {
+        const resolved = resolveCategoryFromInput(query);
+        const cat = getItemCategory(resolved);
+        onValueChange(cat.label, resolved);
+      }}
+      placeholder={placeholder}
+      createLabel={(query) => {
+        const resolved = resolveCategoryFromInput(query);
+        const cat = getItemCategory(resolved);
+        return `Use "${cat.label}" for "${query}"`;
+      }}
+      hint="Pick a category or type a custom one — each gets its own icon."
+      renderOptionStart={(opt) => renderIcon(opt.id)}
+      renderInputStart={(selectedId) => (selectedId ? renderIcon(selectedId) : null)}
+    />
   );
 }

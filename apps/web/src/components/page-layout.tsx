@@ -1,7 +1,10 @@
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import { ChevronRight, Lock, Shield, ShieldCheck } from "lucide-react";
 import type { ContactTrust, Item } from "@lendtrack/shared-types";
 import { ItemThumbnail } from "@/components/ItemThumbnail";
+import { formatAppDate } from "@/lib/format-date";
+import { contactHasTrustScore, contactTrustScore } from "@/lib/contact-trust";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -81,8 +84,8 @@ export function TrustScoreCard({ trust, loading }: { trust?: ContactTrust | null
   }
   if (!trust) return null;
 
-  const hasScore = trust.has_score !== false && trust.trust_score != null;
-  const score = trust.trust_score ?? 0;
+  const hasScore = contactHasTrustScore(trust);
+  const score = contactTrustScore(trust) ?? 0;
 
   const scoreColor = !hasScore
     ? "text-muted-foreground"
@@ -117,9 +120,9 @@ export function TrustScoreCard({ trust, loading }: { trust?: ContactTrust | null
           </p>
         </div>
         {trust.is_verified_neighbor && (
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
             <ShieldCheck className="size-3.5" />
-            Verified neighbor
+            Verified
           </span>
         )}
       </div>
@@ -146,29 +149,29 @@ export function TrustScoreCard({ trust, loading }: { trust?: ContactTrust | null
         </div>
       )}
 
-      <div className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
-        <div>
-          <span className="text-muted-foreground">Completed</span>
+      <div className="mt-5 grid grid-cols-3 gap-x-5 gap-y-4 text-sm sm:grid-cols-6">
+        <div className="min-w-[4.5rem]">
+          <span className="block whitespace-nowrap text-xs text-muted-foreground sm:text-sm">Completed</span>
           <p className="font-semibold">{trust.completed_loans ?? 0}</p>
         </div>
-        <div>
-          <span className="text-muted-foreground">On time</span>
+        <div className="min-w-[4.5rem]">
+          <span className="block whitespace-nowrap text-xs text-muted-foreground sm:text-sm">On time</span>
           <p className="font-semibold">{trust.returned_on_time}</p>
         </div>
-        <div>
-          <span className="text-muted-foreground">Returned late</span>
+        <div className="min-w-[4.5rem]">
+          <span className="block whitespace-nowrap text-xs text-muted-foreground sm:text-sm">Returned late</span>
           <p className="font-semibold">{trust.returned_late ?? 0}</p>
         </div>
-        <div>
-          <span className="text-muted-foreground">Overdue</span>
+        <div className="min-w-[4.5rem]">
+          <span className="block whitespace-nowrap text-xs text-muted-foreground sm:text-sm">Overdue</span>
           <p className="font-semibold">{trust.overdue}</p>
         </div>
-        <div title="Item was not returned and marked as lost or unrecoverable">
-          <span className="text-muted-foreground">Lost</span>
+        <div className="min-w-[4.5rem]" title="Item was not returned and marked as lost or unrecoverable">
+          <span className="block whitespace-nowrap text-xs text-muted-foreground sm:text-sm">Lost</span>
           <p className="font-semibold">{trust.lost}</p>
         </div>
-        <div title="Open loans — shown for context, not included in score">
-          <span className="text-muted-foreground">In progress</span>
+        <div className="min-w-[4.5rem]" title="Open loans — shown for context, not included in score">
+          <span className="block whitespace-nowrap text-xs text-muted-foreground sm:text-sm">In progress</span>
           <p className="font-semibold">{trust.active ?? 0}</p>
         </div>
       </div>
@@ -316,7 +319,9 @@ export function LoanCard({
         </div>
         <p className="text-sm text-muted-foreground">
           {directionLabel} {contactName} ·{" "}
-          <span className={cn(isOverdue && "font-medium text-destructive")}>Due {dueDate}</span>
+          <span className={cn(isOverdue && "font-medium text-destructive")}>
+            Due {formatAppDate(dueDate)}
+          </span>
         </p>
       </div>
       <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
@@ -325,12 +330,16 @@ export function LoanCard({
 }
 
 export function EmptyState({
+  icon: Icon,
+  title,
   message,
   href,
   linkLabel,
   onAction,
   actionLabel,
 }: {
+  icon?: LucideIcon;
+  title?: string;
   message: string;
   href?: string;
   linkLabel?: string;
@@ -338,18 +347,21 @@ export function EmptyState({
   actionLabel?: string;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
-      <p className="mx-auto max-w-sm text-muted-foreground">{message}</p>
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center shadow-sm">
+      {Icon && (
+        <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Icon className="size-7" />
+        </div>
+      )}
+      {title && <h3 className="text-lg font-semibold">{title}</h3>}
+      <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{message}</p>
       {onAction && actionLabel && (
-        <Button type="button" onClick={onAction} className="mt-5 rounded-xl active:scale-95">
+        <Button type="button" onClick={onAction} className="mt-6 rounded-lg">
           {actionLabel}
         </Button>
       )}
       {!onAction && href && linkLabel && (
-        <Link
-          href={href}
-          className={cn(buttonVariants(), "mt-5 rounded-xl active:scale-95")}
-        >
+        <Link href={href} className={cn(buttonVariants(), "mt-6 rounded-lg")}>
           {linkLabel}
         </Link>
       )}

@@ -7,6 +7,7 @@ import { Check, ArrowLeft, Sparkles, Zap } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { PageHeader, PageSkeleton } from "@/components/page-layout";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { useProfile } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import type { Subscription } from "@lendtrack/shared-types";
@@ -52,8 +53,9 @@ const PLANS = [
     features: [
       "Unlimited active loans",
       "All loans stay editable on Premium",
+      "Weekly digest emails (Mondays)",
+      "Export full loan history (CSV)",
       "Email due-date reminders",
-      "Support ongoing feature rollouts",
     ],
     cta: "Upgrade to Premium",
     highlighted: true,
@@ -64,17 +66,21 @@ export default function BillingPage() {
   const { data: profile } = useProfile();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
+    setLoadError(null);
     supabase
       .from("subscriptions")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => {
-        setSubscription(data);
+      .then(({ data, error }) => {
+        if (error) setLoadError(error.message);
+        else setSubscription(data);
         setLoading(false);
       });
   }, [profile?.plan]);
@@ -120,6 +126,7 @@ export default function BillingPage() {
   return (
     <AuthGuard>
       <AppShell>
+        <div className="page-canvas animate-fade-in">
         <PageHeader
           title="Billing & plans"
           description="Choose the plan that fits how much you lend and borrow"
@@ -136,6 +143,25 @@ export default function BillingPage() {
 
         {loading ? (
           <PageSkeleton />
+        ) : loadError ? (
+          <QueryErrorState
+            message="Could not load billing details."
+            onRetry={() => {
+              setLoading(true);
+              setLoadError(null);
+              supabase
+                .from("subscriptions")
+                .select("*")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle()
+                .then(({ data, error }) => {
+                  if (error) setLoadError(error.message);
+                  else setSubscription(data);
+                  setLoading(false);
+                });
+            }}
+          />
         ) : (
           <div className="space-y-8">
             <div className="flex flex-wrap items-center gap-2">
@@ -231,6 +257,7 @@ export default function BillingPage() {
             </Card>
           </div>
         )}
+        </div>
       </AppShell>
     </AuthGuard>
   );

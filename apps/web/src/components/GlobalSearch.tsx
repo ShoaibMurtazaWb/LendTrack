@@ -91,38 +91,40 @@ export function GlobalSearch({
 
   return (
     <div ref={ref} className={cn("relative w-full", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        type="search"
-        role="combobox"
-        aria-expanded={showDropdown}
-        aria-autocomplete="list"
-        autoFocus={autoFocus}
-        placeholder="Search loans and contacts…"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-          setActiveIndex(-1);
-        }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setActiveIndex((i) => Math.min(i + 1, results.length - 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setActiveIndex((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter" && activeIndex >= 0 && results[activeIndex]) {
-            e.preventDefault();
-            navigate(results[activeIndex].href);
-          } else if (e.key === "Escape") {
-            setOpen(false);
+      <div className="flex h-10 items-center rounded-lg bg-muted px-4 ring-1 ring-border focus-within:ring-2 focus-within:ring-primary">
+        <Search className="size-4 shrink-0 text-outline" aria-hidden />
+        <Input
+          type="search"
+          role="combobox"
+          aria-expanded={showDropdown}
+          aria-autocomplete="list"
+          autoFocus={autoFocus}
+          placeholder="Search loans and contacts…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
             setActiveIndex(-1);
-          }
-        }}
-        className="h-10 cursor-text rounded-xl border-border bg-muted/50 pl-9"
-      />
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActiveIndex((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter" && activeIndex >= 0 && results[activeIndex]) {
+              e.preventDefault();
+              navigate(results[activeIndex].href);
+            } else if (e.key === "Escape") {
+              setOpen(false);
+              setActiveIndex(-1);
+            }
+          }}
+          className="h-9 cursor-text border-0 bg-transparent pl-2 shadow-none focus-visible:ring-0"
+        />
+      </div>
 
       {showDropdown && (
         <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">

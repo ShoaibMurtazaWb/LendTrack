@@ -9,7 +9,7 @@ import {
   bulletList,
   appUrl,
 } from "./template";
-import type { LoanMailContext, MailPayload, SendResult } from "./types";
+import type { LoanMailContext, MailPayload, SendResult, WeeklyDigestMailContext } from "./types";
 
 function send(payload: MailPayload): Promise<SendResult> {
   return deliverMail(payload);
@@ -35,6 +35,28 @@ export function sendLoginNotification(opts: {
   ]);
 
   return send({ to: opts.to, subject: "New sign-in to your LendTrack account", html, text });
+}
+
+export function sendPasswordResetEmail(opts: {
+  to: string;
+  name?: string;
+  resetUrl: string;
+}): Promise<SendResult> {
+  const title = "Reset your password";
+  const { html, text } = buildMail(title, [
+    greeting(opts.name),
+    paragraph("We received a request to reset your LendTrack password."),
+    paragraph("Use the button below to choose a new password."),
+    ctaButton("Reset password", opts.resetUrl),
+    alertBox("If you didn't request this, you can safely ignore this email.", "info"),
+  ]);
+
+  return send({
+    to: opts.to,
+    subject: "Reset your LendTrack password",
+    html,
+    text,
+  });
 }
 
 export function sendPremiumEndingSoon(opts: {
@@ -205,6 +227,38 @@ export function sendLoanCreatedContact(opts: LoanMailContext): Promise<SendResul
   return send({
     to: opts.contactEmail,
     subject: `LendTrack: ${opts.itemName} — return by ${opts.expectedReturnAt}`,
+    html,
+    text,
+  });
+}
+
+export function sendWeeklyDigest(opts: WeeklyDigestMailContext): Promise<SendResult> {
+  const title = "Your weekly lending summary";
+  const dueLines =
+    opts.dueSoon.length > 0
+      ? opts.dueSoon
+          .slice(0, 5)
+          .map((row) => `<li><strong>${row.itemName}</strong> with ${row.contactName} — due ${row.dueDate}</li>`)
+          .join("")
+      : "<li>Nothing due in the next 7 days</li>";
+
+  const { html, text } = buildMail(title, [
+    greeting(opts.ownerName),
+    paragraph("Here's your LendTrack snapshot for the week ahead."),
+    keyValueTable([
+      { label: "Active loans", value: String(opts.activeCount) },
+      { label: "Overdue", value: String(opts.overdueCount) },
+      { label: "Returned (all time)", value: String(opts.returnedCount) },
+    ]),
+    paragraph("<strong>Due in the next 7 days</strong>"),
+    `<ul style="margin:0;padding-left:20px;line-height:1.6">${dueLines}</ul>`,
+    ctaButton("Open dashboard", opts.dashboardUrl),
+    paragraph("You're receiving this because weekly digest is enabled in Settings."),
+  ]);
+
+  return send({
+    to: opts.ownerEmail,
+    subject: "Your LendTrack weekly digest",
     html,
     text,
   });

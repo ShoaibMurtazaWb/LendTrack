@@ -1,46 +1,91 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import {
-  DashboardDirectionChart,
-  DashboardStatusChart,
-  DashboardMetricTiles,
+  DashboardPerformanceCards,
+  DashboardQuickActions,
+  DashboardRecentActivity,
   DashboardTopContacts,
   DashboardUpgradeCard,
+  DashboardWeekStrip,
   DashboardWelcome,
 } from "@/components/dashboard/DashboardWidgets";
-import { EmptyState, LoanCard, PageSkeleton } from "@/components/page-layout";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
+import { PageSkeleton } from "@/components/page-layout";
 import { QueryErrorState } from "@/components/QueryErrorState";
-import { useDashboardSummary } from "@/hooks/useLoans";
+import { useDashboardSummary, useLoans } from "@/hooks/useLoans";
 import { useProfile } from "@/hooks/useAuth";
+import { useContacts } from "@/hooks/useContacts";
 
 export default function DashboardPage() {
   const { data, isLoading, isError, refetch } = useDashboardSummary();
+  const { data: allLoans } = useLoans();
   const { data: profile } = useProfile();
+  const { data: contacts } = useContacts();
+  const [dismissedOverdueKey, setDismissedOverdueKey] = useState<string | null>(null);
+
+  const calendarLoans =
+    allLoans?.filter(
+      (l) => (l.status === "active" || l.status === "overdue") && !l.is_locked
+    ) ?? [];
 
   const hasOverdue = (data?.overdue_count ?? 0) > 0;
   const dueThisWeek = data?.upcoming_due?.length ?? 0;
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
+  const overdueCount = data?.overdue_count ?? 0;
+  const overdueSessionKey = useMemo(
+    () => `lendtrack:dashboard-overdue-dismissed:${profile?.id ?? "anon"}`,
+    [profile?.id]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = sessionStorage.getItem(overdueSessionKey);
+    setDismissedOverdueKey(stored);
+  }, [overdueSessionKey]);
+
+  const showOverdueBanner =
+    hasOverdue && dismissedOverdueKey !== String(overdueCount);
+
+  const dismissOverdueBanner = () => {
+    const key = String(overdueCount);
+    setDismissedOverdueKey(key);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(overdueSessionKey, key);
+    }
+  };
 
   return (
     <AuthGuard>
       <AppShell>
-        <div className="animate-fade-in pb-20 md:pb-8">
-          {hasOverdue && (
-            <Link
-              href="/loans"
-              className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-red-50 px-5 py-3 text-sm text-destructive transition-colors hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50"
-            >
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="size-4 shrink-0" />
-                You have <strong>{data?.overdue_count}</strong> overdue loan
-                {(data?.overdue_count ?? 0) > 1 ? "s" : ""} — review on Loans page
-              </span>
-              <span className="font-semibold underline">View loans</span>
-            </Link>
+        <div className="page-canvas animate-fade-in">
+          {showOverdueBanner && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive/20 bg-error-container/40 px-5 py-3 text-sm text-destructive">
+              <Link
+                href="/loans"
+                onClick={dismissOverdueBanner}
+                className="flex min-w-0 flex-1 items-center justify-between gap-3 transition-colors hover:text-destructive/80"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <AlertTriangle className="size-4 shrink-0" />
+                  You have <strong>{overdueCount}</strong> overdue loan
+                  {overdueCount > 1 ? "s" : ""}
+                </span>
+                <span className="shrink-0 font-semibold underline">Review</span>
+              </Link>
+              <button
+                type="button"
+                onClick={dismissOverdueBanner}
+                aria-label="Dismiss overdue warning"
+                className="shrink-0 rounded-md p-1 text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
           )}
 
           {isLoading ? (
@@ -48,63 +93,39 @@ export default function DashboardPage() {
           ) : isError ? (
             <QueryErrorState onRetry={() => refetch()} />
           ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
-              <div className="flex flex-col gap-6 lg:col-span-8">
-                <DashboardWelcome name={firstName} dueCount={dueThisWeek} />
-                <div className="grid gap-6 md:grid-cols-2">
-                  <DashboardStatusChart
-                    active={data?.active_count ?? 0}
-                    overdue={data?.overdue_count ?? 0}
-                    returned={data?.returned_count ?? 0}
-                    locked={data?.locked_count ?? 0}
-                  />
-                  <DashboardDirectionChart
-                    lentOut={data?.lent_out_count ?? 0}
-                    borrowed={data?.borrowed_count ?? 0}
-                  />
-                </div>
-
-                <div className="rounded-3xl border border-border bg-card">
-                  <div className="flex items-center justify-between border-b border-border px-6 py-4">
-                    <h2 className="font-heading text-xl font-semibold">Upcoming returns</h2>
-                    <Link href="/loans" className="text-sm font-semibold text-primary hover:underline">
-                      View all
-                    </Link>
-                  </div>
-                  {!data?.upcoming_due?.length ? (
-                    <div className="p-6">
-                      <EmptyState message="No loans due this week." />
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-border">
-                      {data.upcoming_due.slice(0, 5).map((loan) => (
-                        <LoanCard
-                          key={loan.id}
-                          href={`/loans/${loan.id}`}
-                          itemName={loan.item?.name ?? "Item"}
-                          item={loan.item}
-                          contactName={loan.contact?.name ?? "Contact"}
-                          direction={loan.direction}
-                          dueDate={loan.expected_return_at}
-                          status={loan.status}
-                          isLocked={loan.is_locked}
-                          variant="list"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-6 lg:col-span-4">
-                <DashboardMetricTiles
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-5">
+              <section className="flex flex-col gap-5 lg:col-span-8">
+                <DashboardWelcome
+                  name={firstName}
+                  dueCount={dueThisWeek}
+                  activeCount={data?.active_count ?? 0}
+                  overdueCount={data?.overdue_count ?? 0}
+                />
+                <OnboardingChecklist
+                  hasContacts={(contacts?.length ?? 0) > 0}
+                  hasLoans={
+                    (data?.active_count ?? 0) +
+                      (data?.overdue_count ?? 0) +
+                      (data?.returned_count ?? 0) +
+                      (data?.locked_count ?? 0) >
+                    0
+                  }
+                />
+                <DashboardWeekStrip loans={calendarLoans} />
+                <DashboardPerformanceCards
                   active={data?.active_count ?? 0}
                   overdue={data?.overdue_count ?? 0}
                   returned={data?.returned_count ?? 0}
+                  locked={data?.locked_count ?? 0}
                 />
+              </section>
+
+              <aside className="flex flex-col gap-5 lg:col-span-4">
+                <DashboardQuickActions />
+                <DashboardRecentActivity loans={data?.upcoming_due ?? []} />
                 <DashboardUpgradeCard isPremium={profile?.plan === "premium"} />
                 <DashboardTopContacts contacts={data?.top_contacts ?? []} />
-              </div>
+              </aside>
             </div>
           )}
         </div>

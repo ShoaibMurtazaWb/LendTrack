@@ -4,22 +4,43 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CreditCard, ChevronRight, LogOut } from "lucide-react";
+import { CreditCard, ChevronRight, Download, LogOut } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
-import { PageHeader, PageSkeleton } from "@/components/page-layout";
+import { PageSkeleton } from "@/components/page-layout";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "next-themes";
 import { useLogout, useProfile, useUpdateProfile } from "@/hooks/useAuth";
 import { useAuth } from "@/providers/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
+
+function SettingsSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="pro-card overflow-hidden">
+      <div className="border-b border-outline-variant/30 bg-surface-container-low/50 px-5 py-4 md:px-6">
+        <h2 className="font-heading text-lg font-semibold">{title}</h2>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+      </div>
+      <div className="space-y-4 p-5 md:p-6">{children}</div>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,6 +53,7 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("");
   const [emailReminders, setEmailReminders] = useState(true);
   const [weeklyDigest, setWeeklyDigest] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -42,8 +64,13 @@ export default function SettingsPage() {
   }, [profile]);
 
   const saveProfile = async () => {
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      toast.error("Please enter your name.");
+      return;
+    }
     try {
-      await updateProfile.mutateAsync({ full_name: fullName.trim() });
+      await updateProfile.mutateAsync({ full_name: trimmed });
       toast.success("Profile updated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update profile");
@@ -53,12 +80,51 @@ export default function SettingsPage() {
   const saveNotifications = async (prefs: {
     email_reminders: boolean;
     weekly_digest: boolean;
-  }) => {
+  }): Promise<boolean> => {
     try {
-      await updateProfile.mutateAsync({ notification_prefs: prefs });
+      await updateProfile.mutateAsync({
+        notification_prefs: {
+          ...profile?.notification_prefs,
+          ...prefs,
+        },
+      });
       toast.success("Notification preferences saved");
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save preferences");
+      return false;
+    }
+  };
+
+  const handleExportLoans = async () => {
+    setExporting(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Not signed in");
+
+      const res = await fetch("/api/export/loans", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Export failed");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `lendtrack-loans-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Loan history downloaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to export loans");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -74,23 +140,21 @@ export default function SettingsPage() {
   return (
     <AuthGuard>
       <AppShell>
-        <PageHeader
-          title="Settings"
-          description="Manage your account, appearance, and preferences"
-        />
+        <div className="page-canvas animate-fade-in">
+          <div className="mb-8">
+            <h1 className="font-heading text-3xl font-semibold">Settings</h1>
+            <p className="mt-1 text-muted-foreground">
+              Manage your account, appearance, and preferences
+            </p>
+          </div>
 
-        {isLoading ? (
-          <PageSkeleton />
-        ) : isError ? (
-          <QueryErrorState onRetry={() => refetch()} />
-        ) : (
-          <div className="mx-auto max-w-lg space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Profile</CardTitle>
-                <CardDescription>Your display name and account email</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {isLoading ? (
+            <PageSkeleton />
+          ) : isError ? (
+            <QueryErrorState onRetry={() => refetch()} />
+          ) : (
+            <div className="mx-auto max-w-2xl space-y-5">
+              <SettingsSection title="Profile" description="Your display name and account email">
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Display name</Label>
                   <Input
@@ -98,11 +162,12 @@ export default function SettingsPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Your name"
+                    className="rounded-lg border-outline-variant/40 bg-surface-container-low"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input value={user?.email ?? ""} disabled className="bg-muted" />
+                  <Input value={user?.email ?? ""} disabled className="rounded-lg bg-surface-container" />
                   <p className="text-xs text-muted-foreground">
                     Email is managed by your login account and cannot be changed here.
                   </p>
@@ -113,34 +178,27 @@ export default function SettingsPage() {
                     {profile?.plan ?? "free"}
                   </Badge>
                 </div>
-                <Button onClick={saveProfile} disabled={updateProfile.isPending}>
+                <Button onClick={saveProfile} disabled={updateProfile.isPending} className="rounded-lg">
                   Save profile
                 </Button>
-              </CardContent>
-            </Card>
+              </SettingsSection>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance</CardTitle>
-                <CardDescription>Choose light or dark mode for the app</CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <Label>Theme</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Currently {theme === "dark" ? "dark" : theme === "light" ? "light" : "system"}
-                  </p>
+              <SettingsSection title="Appearance" description="Choose light or dark mode for the app">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label>Theme</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Currently {theme === "dark" ? "dark" : theme === "light" ? "light" : "system"}
+                    </p>
+                  </div>
+                  <ThemeToggle />
                 </div>
-                <ThemeToggle />
-              </CardContent>
-            </Card>
+              </SettingsSection>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Notifications</CardTitle>
-                <CardDescription>Choose which emails you receive from LendTrack</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+              <SettingsSection
+                title="Notifications"
+                description="Choose which emails you receive from LendTrack"
+              >
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
                     <Label htmlFor="email-reminders">Due date reminders</Label>
@@ -151,9 +209,14 @@ export default function SettingsPage() {
                   <Switch
                     id="email-reminders"
                     checked={emailReminders}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={async (checked) => {
+                      const prev = emailReminders;
                       setEmailReminders(checked);
-                      saveNotifications({ email_reminders: checked, weekly_digest: weeklyDigest });
+                      const ok = await saveNotifications({
+                        email_reminders: checked,
+                        weekly_digest: weeklyDigest,
+                      });
+                      if (!ok) setEmailReminders(prev);
                     }}
                   />
                 </div>
@@ -162,58 +225,89 @@ export default function SettingsPage() {
                   <div className="space-y-0.5">
                     <Label htmlFor="weekly-digest">Weekly digest</Label>
                     <p className="text-xs text-muted-foreground">
-                      Summary of active and overdue loans (Premium)
+                      Monday email summary of active, overdue, and upcoming loans
                     </p>
+                    {profile?.plan !== "premium" && (
+                      <Link
+                        href="/settings/billing"
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Upgrade to Premium to enable
+                      </Link>
+                    )}
                   </div>
                   <Switch
                     id="weekly-digest"
                     checked={weeklyDigest}
                     disabled={profile?.plan !== "premium"}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={async (checked) => {
+                      const prev = weeklyDigest;
                       setWeeklyDigest(checked);
-                      saveNotifications({ email_reminders: emailReminders, weekly_digest: checked });
+                      const ok = await saveNotifications({
+                        email_reminders: emailReminders,
+                        weekly_digest: checked,
+                      });
+                      if (!ok) setWeeklyDigest(prev);
                     }}
                   />
                 </div>
-              </CardContent>
-            </Card>
+              </SettingsSection>
 
-            <Card className="transition-colors hover:border-primary/40">
-              <Link href="/settings/billing" className="block">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
-                      <CreditCard className="size-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Billing & plans</CardTitle>
-                      <CardDescription>Compare plans and manage subscription</CardDescription>
-                    </div>
+              <SettingsSection title="Data export" description="Download your loan history as a CSV file">
+                {profile?.plan === "premium" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2 rounded-lg"
+                    onClick={handleExportLoans}
+                    disabled={exporting}
+                  >
+                    <Download className="size-4" />
+                    {exporting ? "Preparing export…" : "Export loan history (CSV)"}
+                  </Button>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">CSV export is a Premium feature.</p>
+                    <Link
+                      href="/settings/billing"
+                      className={cn(buttonVariants({ variant: "outline" }), "rounded-lg")}
+                    >
+                      View Premium plans
+                    </Link>
+                  </>
+                )}
+              </SettingsSection>
+
+              <Link
+                href="/settings/billing"
+                className="pro-card-hover flex items-center justify-between gap-4 p-5 md:p-6"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+                    <CreditCard className="size-5" />
                   </div>
-                  <ChevronRight className="size-5 text-muted-foreground" />
-                </CardHeader>
+                  <div>
+                    <p className="font-semibold">Billing & plans</p>
+                    <p className="text-sm text-muted-foreground">Compare plans and manage subscription</p>
+                  </div>
+                </div>
+                <ChevronRight className="size-5 text-muted-foreground" />
               </Link>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Account</CardTitle>
-                <CardDescription>Sign out of LendTrack on this device</CardDescription>
-              </CardHeader>
-              <CardContent>
+              <SettingsSection title="Account" description="Sign out of LendTrack on this device">
                 <Button
                   variant="outline"
-                  className="w-full gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  className="w-full gap-2 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={handleLogout}
                   disabled={logout.isPending}
                 >
                   <LogOut className="size-4" />
                   {logout.isPending ? "Signing out…" : "Sign out"}
                 </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </SettingsSection>
+            </div>
+          )}
+        </div>
       </AppShell>
     </AuthGuard>
   );

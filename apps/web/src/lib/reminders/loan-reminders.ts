@@ -167,3 +167,114 @@ export async function processAllLoanReminders() {
 
   return { users: profiles?.length ?? 0, processed: total };
 }
+
+function mondayKey(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return localDateString(d);
+}
+
+export async function processWeeklyDigests() {
+  if (!isMailConfigured()) return { sent: 0, skipped: "SMTP not configured" };
+
+  const today = new Date();
+  if (today.getDay() !== 1) {
+    return { sent: 0, skipped: "Not Monday" };
+  }
+
+  const weekKey = mondayKey(today);
+  const supabase = createAdminClient();
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, plan, notification_prefs")
+    .eq("plan", "premium");
+
+  let sent = 0;
+
+  for (const profile of profiles ?? []) {
+    const prefs = profile.notification_prefs as {
+      email_reminders?: boolean;
+      weekly_digest?: boolean;
+      last_weekly_digest_at?: string;
+    } | null;
+
+    if (!prefs?.weekly_digest || prefs.last_weekly_digest_at === weekKey) continue;
+
+    const ownerEmail = await getOwnerEmail(profile.id);
+    if (!ownerEmail) continue;
+
+    const weekLater = new Date(today);
+    weekLater.setDate(weekLater.getDate() + 7);
+    const weekStr = localDateString(weekLater);
+
+    const [
+      { count: activeCount },
+      { count: overdueCount },
+      { count: returnedCount },
+      { data: dueSoon },
+    ] = await Promise.all([
+      supabase
+        .from("loans")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profile.id)
+        .eq("status", "active")
+        .eq("is_locked", false),
+      supabase
+        .from("loans")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profile.id)
+        .eq("status", "overdue"),
+      supabase
+        .from("loans")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profile.id)
+        .eq("status", "returned"),
+      supabase
+        .from("loans")
+        .select("expected_return_at, item:items(name), contact:contacts(name)")
+        .eq("user_id", profile.id)
+        .in("status", ["active", "overdue"])
+        .eq("is_locked", false)
+        .gte("expected_return_at", localDateString(today))
+        .lte("expected_return_at", weekStr)
+        .order("expected_return_at")
+        .limit(5),
+    ]);
+
+    const { sendWeeklyDigest } = await import("@/lib/mail");
+
+    const result = await sendWeeklyDigest({
+      ownerName: profile.full_name ?? "",
+      ownerEmail,
+      activeCount: activeCount ?? 0,
+      overdueCount: overdueCount ?? 0,
+      returnedCount: returnedCount ?? 0,
+      dueSoon: (dueSoon ?? []).map((row) => ({
+        itemName: (row.item as { name?: string } | null)?.name ?? "Item",
+        contactName: (row.contact as { name?: string } | null)?.name ?? "Contact",
+        dueDate: row.expected_return_at,
+      })),
+      dashboardUrl: appUrl("/dashboard"),
+    });
+
+    if (result.sent) {
+      sent++;
+      await supabase
+        .from("profiles")
+        .update({
+          notification_prefs: {
+            ...prefs,
+            email_reminders: prefs.email_reminders ?? true,
+            weekly_digest: true,
+            last_weekly_digest_at: weekKey,
+          },
+        })
+        .eq("id", profile.id);
+    }
+  }
+
+  return { sent };
+}

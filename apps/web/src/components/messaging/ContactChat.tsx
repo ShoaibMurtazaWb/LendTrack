@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { toast } from "sonner";
+import { Check, CheckCheck, Loader2, Send } from "lucide-react";
 import { useContactConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -60,8 +61,8 @@ export function ContactChat({ contactId, contactName, linkedUserId }: ContactCha
     try {
       await sendMessage.mutateAsync(draft);
       setDraft("");
-    } catch {
-      // toast handled by parent if needed
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send message");
     }
   };
 
@@ -91,17 +92,27 @@ export function ContactChat({ contactId, contactName, linkedUserId }: ContactCha
                   )}
                 >
                   <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-                  <p
+                  <div
                     className={cn(
-                      "mt-1 text-[10px]",
-                      mine ? "text-primary-foreground/70" : "text-muted-foreground"
+                      "mt-1 flex items-center gap-1",
+                      mine ? "justify-end text-primary-foreground/70" : "text-muted-foreground"
                     )}
                   >
-                    {new Date(msg.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                    <span className="text-[10px]">
+                      {new Date(msg.created_at).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {mine &&
+                      (msg.id.startsWith("temp-") ? (
+                        <Check className="size-3 shrink-0 text-primary-foreground/70" aria-label="Sent" />
+                      ) : msg.read_at ? (
+                        <CheckCheck className="size-3 shrink-0 text-sky-300" aria-label="Viewed" />
+                      ) : (
+                        <CheckCheck className="size-3 shrink-0 text-primary-foreground/70" aria-label="Received" />
+                      ))}
+                  </div>
                 </div>
               </div>
             );

@@ -9,24 +9,24 @@ import { ItemThumbnail } from "@/components/ItemThumbnail";
 import { DirectionToggle, PageSkeleton } from "@/components/page-layout";
 import { useContacts, useCreateContact } from "@/hooks/useContacts";
 import { useCreateItem, useItems, useUpdateItem } from "@/hooks/useItems";
-import { useCreateLoan } from "@/hooks/useLoans";
+import { useCreateLoan, useDashboardSummary } from "@/hooks/useLoans";
+import { useProfile } from "@/hooks/useAuth";
+import { useAuth } from "@/providers/AuthProvider";
 import {
   getCategoryLabel,
-  guessCategoryFromName,
-  resolveCategoryFromInput,
   type ItemCategoryId,
 } from "@/lib/item-categories";
 import { uploadItemPhoto } from "@/lib/upload-item-image";
+import { assertNotSelfContact, isOwnContactEmail } from "@/lib/contact-validation";
+import { UpgradePromptDialog } from "@/components/billing/UpgradePromptDialog";
+import { PlanLimitBanner } from "@/components/billing/PlanLimitBanner";
+import { FREE_ACTIVE_LOAN_LIMIT, isPlanLimitError } from "@/lib/plan-limits";
 import { cn } from "@/lib/utils";
 import { Camera, Package, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-function contactLabel(name: string, email?: string | null) {
-  return email ? `${name} (${email})` : name;
-}
 
 export type NewLoanFormProps = {
   presetContactId?: string | null;
@@ -44,13 +44,17 @@ export function NewLoanForm({
   variant = "page",
 }: NewLoanFormProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const { data: profile } = useProfile();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
   const { data: items, isLoading: itemsLoading } = useItems();
   const createItem = useCreateItem();
   const updateItem = useUpdateItem();
   const createContact = useCreateContact();
   const createLoan = useCreateLoan();
+  const { data: dashboard } = useDashboardSummary();
   const categoryTouched = useRef(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const itemOptions = useMemo(
     () =>
@@ -64,18 +68,21 @@ export function NewLoanForm({
 
   const contactOptions = useMemo(
     () =>
-      contacts?.map((c) => ({
-        id: c.id,
-        label: contactLabel(c.name, c.email),
-        searchText: `${c.name} ${c.email ?? ""}`.trim(),
-      })) ?? [],
-    [contacts]
+      contacts
+        ?.filter((c) => !isOwnContactEmail(user?.email, c.email))
+        .map((c) => ({
+          id: c.id,
+          label: c.name,
+          subtitle: c.email ?? undefined,
+          searchText: `${c.name} ${c.email ?? ""}`.trim(),
+        })) ?? [],
+    [contacts, user?.email]
   );
 
   const [itemQuery, setItemQuery] = useState("");
   const [itemId, setItemId] = useState<string | null>(null);
-  const [categoryQuery, setCategoryQuery] = useState("Other");
-  const [categoryId, setCategoryId] = useState<ItemCategoryId | null>("other");
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [categoryId, setCategoryId] = useState<ItemCategoryId | null>(null);
   const [itemPhotoFile, setItemPhotoFile] = useState<File | null>(null);
   const [itemPhotoPreview, setItemPhotoPreview] = useState<string | null>(null);
   const [contactQuery, setContactQuery] = useState("");
@@ -91,13 +98,17 @@ export function NewLoanForm({
   useEffect(() => {
     if (!presetContactId || !contacts?.length) return;
     const preset = contacts.find((c) => c.id === presetContactId);
-    if (preset) {
-      setContactId(preset.id);
-      setContactQuery(contactLabel(preset.name, preset.email));
+    if (!preset) return;
+    if (isOwnContactEmail(user?.email, preset.email)) {
+      toast.error("You can't create a loan with yourself as the contact.");
+      return;
     }
-  }, [presetContactId, contacts]);
+    setContactId(preset.id);
+    setContactQuery(preset.name);
+  }, [presetContactId, contacts, user?.email]);
 
   const isNewContact = contactQuery.trim().length > 0 && !contactId;
+  const selectedContact = contacts?.find((c) => c.id === contactId);
   const selectedItem = items?.find((i) => i.id === itemId);
 
   useEffect(() => {
@@ -110,13 +121,6 @@ export function NewLoanForm({
       categoryTouched.current = false;
     }
   }, [selectedItem]);
-
-  useEffect(() => {
-    if (itemId || !itemQuery.trim() || categoryTouched.current) return;
-    const guessed = guessCategoryFromName(itemQuery);
-    setCategoryId(guessed);
-    setCategoryQuery(getCategoryLabel(guessed));
-  }, [itemQuery, itemId]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -146,9 +150,7 @@ export function NewLoanForm({
     return contactQuery.trim();
   };
 
-  const resolveCategory = (): ItemCategoryId => {
-    return categoryId ?? resolveCategoryFromInput(categoryQuery);
-  };
+  const resolveCategory = (): ItemCategoryId | null => categoryId;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +162,22 @@ export function NewLoanForm({
 
       const itemName = resolveItemName();
       const contactName = resolveContactName();
+
+      if (!resolvedItemId && itemName && !finalCategory) {
+        toast.error("Please select a category for this item.");
+        return;
+      }
+
+      const contactEmailForCheck =
+        contactId != null
+          ? contacts?.find((c) => c.id === contactId)?.email
+          : newContactEmail.trim() || undefined;
+      try {
+        assertNotSelfContact(user?.email, contactEmailForCheck);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Invalid contact");
+        return;
+      }
 
       if (!resolvedItemId && itemName) {
         const existingItem = items?.find(
@@ -174,7 +192,7 @@ export function NewLoanForm({
           }
           const item = await createItem.mutateAsync({
             name: itemName,
-            category: finalCategory,
+            category: finalCategory!,
             photo_url: photoUrl,
           });
           resolvedItemId = item.id;
@@ -194,7 +212,7 @@ export function NewLoanForm({
           }
           await updateItem.mutateAsync({
             id: resolvedItemId,
-            category: finalCategory,
+            category: finalCategory!,
             photo_url: photoUrl,
           });
         }
@@ -205,6 +223,10 @@ export function NewLoanForm({
           (c) => c.name.toLowerCase() === contactName.toLowerCase()
         );
         if (existingContact) {
+          if (isOwnContactEmail(user?.email, existingContact.email)) {
+            toast.error("You can't lend to or borrow from yourself.");
+            return;
+          }
           resolvedContactId = existingContact.id;
         } else {
           const contact = await createContact.mutateAsync({
@@ -221,6 +243,10 @@ export function NewLoanForm({
       }
       if (!resolvedContactId) {
         toast.error("Please enter a contact name.");
+        return;
+      }
+      if (expectedReturnAt < loanedAt) {
+        toast.error("Expected return must be on or after the loan date.");
         return;
       }
 
@@ -240,17 +266,32 @@ export function NewLoanForm({
         router.push("/loans");
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create loan");
+      const message = err instanceof Error ? err.message : "Failed to create loan";
+      if (isPlanLimitError(message)) {
+        setUpgradeOpen(true);
+        return;
+      }
+      toast.error(message);
     }
   };
 
   const formLoading = itemsLoading || contactsLoading;
   const displayCategory = resolveCategory();
+  const userFirstName = profile?.full_name?.split(" ")[0] ?? "there";
+  const isFreePlan = profile?.plan !== "premium";
+  const activeLoanCount = dashboard?.active_count ?? 0;
+  const showPlanLimitBanner =
+    !isDialog && isFreePlan && activeLoanCount >= FREE_ACTIVE_LOAN_LIMIT - 1;
 
   const canAdvanceFromItem = resolveItemName().length > 0;
   const canAdvanceFromContact = resolveContactName().length > 0;
   const canSubmit =
-    canAdvanceFromItem && canAdvanceFromContact && loanedAt && expectedReturnAt;
+    canAdvanceFromItem &&
+    canAdvanceFromContact &&
+    categoryId != null &&
+    loanedAt &&
+    expectedReturnAt &&
+    expectedReturnAt >= loanedAt;
 
   const goNext = () => setStep((s) => Math.min(s + 1, DIALOG_STEPS.length - 1));
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
@@ -272,6 +313,10 @@ export function NewLoanForm({
             if (!id) {
               setItemPhotoPreview(null);
               setItemPhotoFile(null);
+              if (!categoryTouched.current) {
+                setCategoryId(null);
+                setCategoryQuery("");
+              }
             }
           }}
           placeholder="e.g. Lawn Mower, Drill, Book"
@@ -292,6 +337,7 @@ export function NewLoanForm({
             setCategoryQuery(label);
             setCategoryId(id);
           }}
+          placeholder="Select or search a category…"
         />
       </div>
 
@@ -300,7 +346,7 @@ export function NewLoanForm({
           Item photo <span className="font-normal normal-case">(optional)</span>
         </Label>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="relative w-full max-w-[140px] overflow-hidden rounded-xl border border-border/60">
+          <div className="relative w-full max-w-[140px] overflow-hidden rounded-xl border border-border">
             {itemPhotoPreview ? (
               <>
                 <ItemThumbnail
@@ -313,22 +359,19 @@ export function NewLoanForm({
                 <button
                   type="button"
                   onClick={clearPhoto}
-                  className="absolute right-1 top-1 flex size-7 cursor-pointer items-center justify-center rounded-full bg-background/90 shadow"
+                  className="absolute right-1.5 top-1.5 flex size-7 cursor-pointer items-center justify-center rounded-full bg-background/90 shadow"
                   aria-label="Remove photo"
                 >
                   <X className="size-4" />
                 </button>
               </>
             ) : (
-              <div className="flex size-[140px] flex-col items-center justify-center gap-2 bg-muted/50 text-muted-foreground">
-                <ItemThumbnail
-                  name={itemQuery || "Item"}
-                  category={displayCategory}
-                  size="lg"
-                  className="!size-20"
-                />
-                <span className="text-xs">Category icon</span>
-              </div>
+              <ItemThumbnail
+                name={itemQuery || "Item"}
+                category={displayCategory}
+                size="lg"
+                className="!size-[140px] rounded-xl"
+              />
             )}
           </div>
           <label className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-6 py-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/30">
@@ -366,10 +409,13 @@ export function NewLoanForm({
           placeholder="Search contacts or type a new name…"
           createLabel={(q) => `Add new contact "${q}"`}
         />
+        {selectedContact?.email && (
+          <p className="text-xs text-muted-foreground">{selectedContact.email}</p>
+        )}
         {isNewContact && (
           <Input
             type="email"
-            placeholder="Their email (optional)"
+            placeholder="Their email (optional — links accounts for messaging)"
             className="h-12 cursor-text rounded-xl"
             value={newContactEmail}
             onChange={(e) => setNewContactEmail(e.target.value)}
@@ -436,11 +482,13 @@ export function NewLoanForm({
   return (
     <div className={isDialog ? "flex h-full min-h-0 flex-col" : "space-y-5"}>
       {!isDialog && (
-        <div className="rounded-xl bg-primary p-5 text-primary-foreground">
-          <h2 className="font-heading text-xl font-semibold">Lending made simple.</h2>
-          <p className="mt-1 text-sm text-primary-foreground/80">
-            Record neighborhood exchanges with trust.
-          </p>
+        <div className="hero-gradient rounded-xl p-5 text-white">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/70">New loan</p>
+          <h2 className="mt-1 font-heading text-xl font-semibold">Hello, {userFirstName} 👋</h2>
+          {profile?.full_name && (
+            <p className="mt-0.5 text-sm text-white/80">{profile.full_name}</p>
+          )}
+          <p className="text-sm text-white/70">{user?.email ?? "Record neighborhood exchanges with trust."}</p>
         </div>
       )}
 
@@ -481,6 +529,8 @@ export function NewLoanForm({
                 ))}
               </div>
             )}
+
+            {showPlanLimitBanner && <PlanLimitBanner activeCount={activeLoanCount} className="mb-5" />}
 
             <div className={isDialog ? "min-h-0 flex-1 space-y-5" : "space-y-5"}>
               {isDialog ? (
@@ -537,6 +587,7 @@ export function NewLoanForm({
                 type="submit"
                 className="h-14 w-full rounded-xl text-base font-bold shadow-md active:scale-95"
                 disabled={
+                  !canSubmit ||
                   createLoan.isPending ||
                   createItem.isPending ||
                   createContact.isPending ||
@@ -558,6 +609,8 @@ export function NewLoanForm({
           </p>
         </div>
       )}
+
+      <UpgradePromptDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
     </div>
   );
 }

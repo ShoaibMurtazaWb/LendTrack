@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { processAllLoanReminders } from "@/lib/reminders/loan-reminders";
+import { processAllLoanReminders, processWeeklyDigests } from "@/lib/reminders/loan-reminders";
 
 /** Daily cron — set CRON_SECRET and call via Vercel Cron or external scheduler. */
 export async function POST(request: Request) {
@@ -10,6 +10,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await processAllLoanReminders();
-  return NextResponse.json({ success: true, ...result });
+  const [reminders, digest] = await Promise.all([
+    processAllLoanReminders(),
+    processWeeklyDigests(),
+  ]);
+
+  return NextResponse.json({ success: true, reminders, digest });
 }

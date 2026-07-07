@@ -8,15 +8,16 @@ import { ArrowLeft, Mail, MessageSquare, Pencil, Phone, Trash2, ShieldCheck } fr
 import { EditContactDialog } from "@/components/contacts/EditContactDialog";
 import { AppShell } from "@/components/AppShell";
 import { AuthGuard } from "@/components/AuthGuard";
+import { LoanGridCard } from "@/components/LoanGridCard";
 import { Pagination, paginateArray } from "@/components/Pagination";
 import { ContactChat } from "@/components/messaging/ContactChat";
 import {
   EmptyState,
   PageHeader,
   PageSkeleton,
-  StatusBadge,
   TrustScoreCard,
 } from "@/components/page-layout";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { useContact, useContactLoans, useContactTrust, useDeleteContact } from "@/hooks/useContacts";
 import { useNewLoanDialog } from "@/components/loans/NewLoanDialogProvider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -37,7 +38,7 @@ const LOAN_PAGE_SIZE = 5;
 
 function ContactDetailContent({ id }: { id: string }) {
   const router = useRouter();
-  const { data: contact, isLoading: contactLoading } = useContact(id);
+  const { data: contact, isLoading: contactLoading, isError: contactError, refetch } = useContact(id);
   const { data: loans, isLoading: loansLoading } = useContactLoans(id);
   const { data: trust, isLoading: trustLoading } = useContactTrust(id);
   const deleteContact = useDeleteContact();
@@ -66,6 +67,7 @@ function ContactDetailContent({ id }: { id: string }) {
 
   return (
     <>
+      <div className="page-canvas animate-fade-in">
       <PageHeader
         title={contact?.name ?? "Contact"}
         description="Trust profile and loan history — make informed lending decisions"
@@ -88,37 +90,39 @@ function ContactDetailContent({ id }: { id: string }) {
 
       {isLoading ? (
         <PageSkeleton />
+      ) : contactError ? (
+        <QueryErrorState onRetry={() => refetch()} />
       ) : !contact ? (
         <EmptyState message="Contact not found." href="/contacts" linkLabel="Back to contacts" />
       ) : (
         <div className="animate-fade-in space-y-6 pb-8">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="rounded-2xl border-border/60 shadow-sm">
-              <CardHeader className="flex flex-row items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="font-heading text-2xl">{contact.name}</CardTitle>
+          <div className="grid gap-6 lg:grid-cols-5">
+            <Card className="rounded-2xl border-border/60 shadow-sm lg:col-span-2">
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="font-heading text-xl sm:text-2xl">{contact.name}</CardTitle>
                   <CardDescription className="mt-2 space-y-1">
                     {contact.email && (
-                      <span className="flex items-center gap-2">
-                        <Mail className="size-4" />
+                      <span className="flex items-center gap-2 break-all">
+                        <Mail className="size-4 shrink-0" />
                         {contact.email}
                       </span>
                     )}
                     {contact.phone && (
                       <span className="flex items-center gap-2">
-                        <Phone className="size-4" />
+                        <Phone className="size-4 shrink-0" />
                         {contact.phone}
                       </span>
                     )}
                   </CardDescription>
                   {contact.linked_user_id && (
                     <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-primary">
-                      <ShieldCheck className="size-4" />
-                      Registered on LendTrack — mutual contact
+                      <ShieldCheck className="size-4 shrink-0" />
+                      Verified on LendTrack
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex shrink-0 gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
                     <Pencil className="size-4" />
                     Edit
@@ -140,7 +144,9 @@ function ContactDetailContent({ id }: { id: string }) {
               )}
             </Card>
 
-            <TrustScoreCard trust={trust} loading={trustLoading} />
+            <div className="min-w-0 lg:col-span-3">
+              <TrustScoreCard trust={trust} loading={trustLoading} />
+            </div>
           </div>
 
           <ContactChat
@@ -165,20 +171,19 @@ function ContactDetailContent({ id }: { id: string }) {
               />
             ) : (
               <>
-                <div className="space-y-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   {paginatedLoans!.data.map((loan) => (
-                    <Card key={loan.id} className="rounded-xl border-border/60 transition-colors hover:border-primary/30">
-                      <Link href={`/loans/${loan.id}`} className="flex items-center justify-between p-4">
-                        <div>
-                          <p className="font-semibold">{loan.item?.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {loan.direction === "lent_out" ? "You lent" : "You borrowed"} · Due{" "}
-                            {loan.expected_return_at}
-                          </p>
-                        </div>
-                        <StatusBadge status={loan.status} />
-                      </Link>
-                    </Card>
+                    <LoanGridCard
+                      key={loan.id}
+                      href={`/loans/${loan.id}`}
+                      item={loan.item}
+                      contactName={contact.name}
+                      direction={loan.direction}
+                      dueDate={loan.expected_return_at}
+                      status={loan.status}
+                      isLocked={loan.is_locked}
+                      editHref={`/loans/${loan.id}?edit=1`}
+                    />
                   ))}
                 </div>
                 <Pagination
@@ -217,6 +222,7 @@ function ContactDetailContent({ id }: { id: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </>
   );
 }
@@ -226,7 +232,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <AuthGuard>
-      <AppShell>
+      <AppShell hideFab>
         <ContactDetailContent id={id} />
       </AppShell>
     </AuthGuard>

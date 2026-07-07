@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DashboardSummary, LoanWithRelations } from "@lendtrack/shared-types";
+import { contactTrustScore } from "@/lib/contact-trust";
+import { assertNotSelfContact } from "@/lib/contact-validation";
 import { localDateString, syncOverdueLoans, invalidateLoanCaches } from "@/lib/loan-sync";
 import { getAuthUser, LOAN_SELECT, supabase } from "@/lib/supabase";
 
@@ -107,7 +109,8 @@ export function useDashboardSummary() {
         { count: returnedCount },
         { count: lentOutCount },
         { count: borrowedCount },
-        { data: upcoming, error },
+        { data: upcoming, error: upcomingError },
+        { data: contactLoans, error: contactLoansError },
       ] = await Promise.all([
         supabase.from("loans").select("*", { count: "exact", head: true }).eq("status", "active").eq("is_locked", false),
         supabase.from("loans").select("*", { count: "exact", head: true }).eq("status", "overdue").eq("is_locked", false),
@@ -124,35 +127,57 @@ export function useDashboardSummary() {
           .lte("expected_return_at", weekStr)
           .order("expected_return_at")
           .limit(10),
+        supabase
+          .from("loans")
+          .select("contact_id, status, contact:contacts(id, name)")
+          .not("contact_id", "is", null),
       ]);
 
-      if (error) throw new Error(error.message);
+      if (upcomingError) throw new Error(upcomingError.message);
+      if (contactLoansError) throw new Error(contactLoansError.message);
 
       const upcomingList = (upcoming ?? []) as LoanWithRelations[];
 
-      const contactCounts = new Map<string, { id: string; name: string; loans: number }>();
-      for (const loan of upcomingList) {
-        if (!loan.contact_id || !loan.contact?.name) continue;
-        const existing = contactCounts.get(loan.contact_id);
-        if (existing) existing.loans++;
-        else contactCounts.set(loan.contact_id, { id: loan.contact_id, name: loan.contact.name, loans: 1 });
+      const contactCounts = new Map<
+        string,
+        { id: string; name: string; completed: number; open: number }
+      >();
+      for (const row of contactLoans ?? []) {
+        const contactId = row.contact_id as string | null;
+        const rawContact = row.contact as { id: string; name: string } | { id: string; name: string }[] | null;
+        const contact = Array.isArray(rawContact) ? rawContact[0] : rawContact;
+        if (!contactId || !contact?.name) continue;
+
+        const entry = contactCounts.get(contactId) ?? {
+          id: contactId,
+          name: contact.name,
+          completed: 0,
+          open: 0,
+        };
+
+        if (row.status === "returned" || row.status === "lost") {
+          entry.completed++;
+        } else if (row.status === "active" || row.status === "overdue") {
+          entry.open++;
+        }
+
+        contactCounts.set(contactId, entry);
       }
 
       const topContactsRaw = [...contactCounts.values()]
-        .sort((a, b) => b.loans - a.loans)
+        .filter((c) => c.completed > 0 || c.open > 0)
+        .sort((a, b) => b.completed - a.completed || b.open - a.open)
         .slice(0, 4);
 
       const top_contacts = await Promise.all(
         topContactsRaw.map(async (c) => {
-          const { data: trust } = await supabase.rpc("get_contact_trust", { p_contact_id: c.id });
-          const trustScore = (trust as { trust_score?: number | null; has_score?: boolean } | null)
-            ?.trust_score;
-          const hasScore = (trust as { has_score?: boolean } | null)?.has_score !== false;
+          const { data: trustData } = await supabase.rpc("get_contact_trust", { p_contact_id: c.id });
+          const trustScore = contactTrustScore(trustData);
           return {
             id: c.id,
             name: c.name,
-            loans: c.loans,
-            score: hasScore && trustScore != null ? trustScore : 0,
+            loans: c.completed + c.open,
+            score: trustScore ?? 0,
           };
         })
       );
@@ -186,6 +211,16 @@ export function useCreateLoan() {
       const user = await getAuthUser();
       if (!user) throw new Error("Not authenticated");
 
+      const { data: contact, error: contactError } = await supabase
+        .from("contacts")
+        .select("email")
+        .eq("id", body.contact_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (contactError) throw new Error(contactError.message);
+      assertNotSelfContact(user.email, contact.email);
+
       const { data, error } = await supabase
         .from("loans")
         .insert({ ...body, user_id: user.id, notes: body.notes || null })
@@ -195,6 +230,9 @@ export function useCreateLoan() {
       if (error) {
         if (error.message.includes("PLAN_LIMIT")) {
           throw new Error("Free plan allows up to 5 active loans. Upgrade to Premium for unlimited loans.");
+        }
+        if (error.message.includes("LOAN_SELF") || error.message.includes("CONTACT_SELF")) {
+          throw new Error("You can't lend to or borrow from yourself.");
         }
         throw new Error(error.message);
       }
@@ -341,6 +379,22 @@ export function useRevertLoanStatus() {
         throw new Error(error.message);
       }
       return data as LoanWithRelations;
+    },
+    onSuccess: async () => {
+      await syncOverdueLoans();
+      await invalidateLoanCaches(queryClient);
+    },
+  });
+}
+
+export function useDeleteLoan() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("loans").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return id;
     },
     onSuccess: async () => {
       await syncOverdueLoans();
