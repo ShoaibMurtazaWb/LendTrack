@@ -3,13 +3,14 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Mail, Lock } from "lucide-react";
+import { ArrowRight, Mail } from "lucide-react";
 import { useLogin } from "@/hooks/useAuth";
 import { RedirectIfAuthenticated, PublicPageLoader } from "@/components/PublicRoute";
 import { LendTrackLogoMark } from "@/components/LendTrackLogo";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
@@ -103,20 +104,15 @@ function LoginPageContent() {
                   Forgot password?
                 </Link>
               </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="h-11 pl-10"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  aria-invalid={login.isError}
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={login.isError}
+              />
             </div>
 
             {login.isError && (

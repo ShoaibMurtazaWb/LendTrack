@@ -3,13 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Mail, Lock, User } from "lucide-react";
+import { ArrowRight, Mail, User } from "lucide-react";
+import { isDuplicateAccountError } from "@/lib/auth-errors";
 import { useRegister } from "@/hooks/useAuth";
 import { RedirectIfAuthenticated, PublicPageLoader } from "@/components/PublicRoute";
 import { LendTrackLogoMark } from "@/components/LendTrackLogo";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export default function RegisterPage() {
@@ -92,25 +94,28 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  minLength={6}
-                  autoComplete="new-password"
-                  placeholder="At least 6 characters"
-                  className="h-11 pl-10"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+              <PasswordInput
+                id="password"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
 
             {register.isError && (
               <p className="text-sm text-destructive" role="alert">
                 {register.error.message}
+                {isDuplicateAccountError(register.error.message) && (
+                  <>
+                    {" "}
+                    <Link href="/login" className="font-semibold underline hover:text-destructive/80">
+                      Log in
+                    </Link>
+                  </>
+                )}
               </p>
             )}
 

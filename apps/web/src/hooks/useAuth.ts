@@ -2,7 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NotificationPrefs, Profile } from "@lendtrack/shared-types";
-import { formatAuthErrorMessage } from "@/lib/auth-errors";
+import {
+  DUPLICATE_ACCOUNT_MESSAGE,
+  formatAuthErrorMessage,
+  isDuplicateSignUpResult,
+  normalizeAuthEmail,
+} from "@/lib/auth-errors";
 import { getAuthUser, supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -91,12 +96,35 @@ export function useRegister() {
       password: string;
       full_name?: string;
     }) => {
+      const normalizedEmail = normalizeAuthEmail(email);
+
+      const checkResponse = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+
+      if (checkResponse.ok) {
+        const checkPayload = (await checkResponse.json()) as { exists?: boolean };
+        if (checkPayload.exists) {
+          throw new Error(DUPLICATE_ACCOUNT_MESSAGE);
+        }
+      }
+
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: { data: { full_name: full_name || "" } },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(formatAuthErrorMessage(error.message));
+      if (isDuplicateSignUpResult(data)) {
+        throw new Error(DUPLICATE_ACCOUNT_MESSAGE);
+      }
+      if (!data.session) {
+        throw new Error(
+          "Check your email to confirm your account, then log in."
+        );
+      }
       return data;
     },
     onSuccess: () => {
