@@ -31,6 +31,7 @@ Track the items you lend and borrow — with reminders, linked contacts, realtim
 - [Security & Data Integrity](#security--data-integrity)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
+- [Deploy on Vercel](#deploy-on-vercel)
 - [Skills Demonstrated](#skills-demonstrated)
 - [Status & Roadmap](#status--roadmap)
 
@@ -53,8 +54,7 @@ It pairs a friendly product experience with a secure, multi-user backend built o
 | Contacts & items | Manage the people you lend to and the items you own |
 | Realtime messaging | Message linked users with realtime updates |
 | Reminders | Email pipeline for due-soon, overdue, and digest notifications |
-| Billing | Premium plan flow with database-enforced plan limits |
-| PWA | Installable app with an offline shell fallback |
+| Billing | Premium plan flow with Stripe Checkout and webhooks |
 
 ---
 
@@ -62,8 +62,8 @@ It pairs a friendly product experience with a secure, multi-user backend built o
 
 | Layer | Technology |
 | :--- | :--- |
-| Framework | Next.js 16 (App Router) |
-| UI | React 19, Tailwind CSS, shadcn/ui |
+| Framework | Next.js (App Router) |
+| UI | React, Tailwind CSS, shadcn/ui |
 | Data fetching | TanStack Query |
 | Backend | Supabase (Postgres + Auth + Row Level Security) |
 | Server ops | Next.js API routes (billing, cron, email) |
@@ -74,7 +74,7 @@ It pairs a friendly product experience with a secure, multi-user backend built o
 
 ## Architecture
 
-- **Frontend:** Next.js App Router with React 19, styled using Tailwind CSS and shadcn/ui, with TanStack Query for data fetching and caching.
+- **Frontend:** Next.js App Router under `apps/web/src/app`, with TanStack Query for data fetching and caching.
 - **Backend:** Supabase Postgres with Auth and Row Level Security so each user only accesses their own data.
 - **Server operations:** Sensitive work (billing, cron, email) runs through Next.js API routes using the service role key.
 - **Billing:** Stripe Checkout with webhook processing that keeps subscription state in sync.
@@ -86,7 +86,7 @@ It pairs a friendly product experience with a secure, multi-user backend built o
 - Row Level Security policies isolate every user's data at the database layer.
 - The service role key is used only on secure server routes, never in the browser.
 - Sensitive API endpoints validate authentication before running.
-- Plan limits are enforced by database rules, not just the UI.
+- Cron reminders require `Authorization: Bearer <CRON_SECRET>`.
 
 ---
 
@@ -94,9 +94,10 @@ It pairs a friendly product experience with a secure, multi-user backend built o
 
 ```text
 lendtrack/
-├── apps/web/                 # Next.js app (UI + API routes)
+├── apps/web/                 # Next.js app (UI + API routes in src/app)
 ├── packages/shared-types/    # Shared TypeScript interfaces
-└── supabase/migrations/      # SQL schema and migrations (source of truth)
+├── supabase/migrations/      # SQL schema and migrations (source of truth)
+└── vercel.json               # Vercel Cron schedule (repo root)
 ```
 
 ---
@@ -106,7 +107,7 @@ lendtrack/
 **Prerequisites:** Node.js 20+ and a Supabase project.
 
 ```bash
-# 1. Install dependencies
+# 1. Install dependencies (monorepo root)
 npm install
 
 # 2. Configure environment
@@ -123,9 +124,47 @@ Open http://localhost:3000
 
 ---
 
+## Deploy on Vercel
+
+This repo is an **npm workspaces monorepo**. Configure the Vercel project as follows:
+
+| Setting | Value |
+| :--- | :--- |
+| Root Directory | Repository root (`.`) |
+| Install Command | `npm install` |
+| Build Command | `npm run build` |
+| Framework | Next.js |
+
+### Environment variables (Vercel dashboard)
+
+Set these for **Production** (names match `.env.example` — never commit secret values):
+
+| Variable | Notes |
+| :--- | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Hosted Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only |
+| `NEXT_PUBLIC_APP_URL` | `https://lend-track-psi.vercel.app` (or custom domain) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` | Email delivery |
+| `EMAIL_FROM` | From header |
+| `CRON_SECRET` | Must match Bearer token used by Vercel Cron |
+| `STRIPE_SECRET_KEY` | Server only |
+| `STRIPE_WEBHOOK_SECRET` | From Stripe webhook endpoint |
+| `STRIPE_PRICE_ID_PREMIUM` | Premium price ID |
+
+### External dashboard checklist
+
+1. **Supabase Auth** — add the production site URL and redirect allowlist (including `/auth/reset-password`).
+2. **Stripe** — webhook endpoint: `https://<your-domain>/api/billing/webhook`.
+3. **Vercel Cron** — defined in root `vercel.json` as daily `GET /api/cron/loan-reminders` (requires `CRON_SECRET`).
+
+Live demo: [https://lend-track-psi.vercel.app/](https://lend-track-psi.vercel.app/)
+
+---
+
 ## Skills Demonstrated
 
-`Next.js` · `TypeScript` · `Supabase` · `PostgreSQL` · `Authentication` · `Authorization` · `Row Level Security` · `Realtime` · `Stripe Integration` · `PWA Architecture` · `API Route Design`
+`Next.js` · `TypeScript` · `Supabase` · `PostgreSQL` · `Authentication` · `Authorization` · `Row Level Security` · `Realtime` · `Stripe Integration` · `API Route Design`
 
 ---
 
@@ -134,6 +173,6 @@ Open http://localhost:3000
 Active and evolving — core product architecture and flows are implemented.
 
 Planned improvements:
-- Screenshots and a live demo link
+- Screenshots for the README
 - Broader automated test coverage
 - Distributed rate limiting for API routes

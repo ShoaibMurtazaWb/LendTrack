@@ -1,10 +1,13 @@
-import type { NextConfig } from "next";
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
 import path from "path";
+import { fileURLToPath } from "url";
 
+const { loadEnvConfig } = nextEnv;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnvConfig(path.resolve(__dirname, "../.."));
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   transpilePackages: ["@lendtrack/shared-types"],
   images: {
     remotePatterns: [
